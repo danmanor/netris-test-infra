@@ -1,4 +1,16 @@
 ---
+- name: Discover Netris controller URL
+  ansible.builtin.shell:
+    cmd: kubectl get svc traefik -n kube-system -o jsonpath='{.spec.ports[?(@.name=="web")].nodePort}'
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: _traefik_nodeport
+  changed_when: false
+
+- name: Set controller URL
+  ansible.builtin.set_fact:
+    netris_controller_url: "http://localhost:{{ _traefik_nodeport.stdout }}"
+
 - name: Authenticate to Netris controller
   ansible.builtin.include_role:
     name: netris.controller.auth

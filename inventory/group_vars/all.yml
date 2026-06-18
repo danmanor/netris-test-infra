@@ -2,10 +2,9 @@
 netris_lab_dir: "{{ inventory_dir }}/../netris-lab"
 ew_fabric_enable: 0
 
-# Netris Controller
-netris_controller_url: "http://localhost:9443"
+# Netris Controller (URL is discovered dynamically by netris_configure role)
 netris_username: "netris"
-netris_password: "MaqfC1JBM7zasPE2doVT"
+netris_password: "netris"
 netris_validate_certs: false
 
 # OCP Server VM
