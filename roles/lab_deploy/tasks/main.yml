@@ -13,12 +13,17 @@
   ansible.builtin.set_fact:
     _collections_path: "{{ lookup('config', 'COLLECTIONS_PATHS') | join(':') }}"
 
+- name: Install collections into netris-lab
+  ansible.builtin.command:
+    cmd: ansible-galaxy collection install -r requirements.yml -p {{ netris_lab_dir }}/collections --force
+  changed_when: true
+
 - name: Run make setup (prerequisites + cache)
   ansible.builtin.command:
     cmd: make setup
     chdir: "{{ netris_lab_dir }}"
   environment:
-    ANSIBLE_COLLECTIONS_PATHS: "{{ _collections_path }}"
+    ANSIBLE_COLLECTIONS_PATHS: "{{ _collections_path }}:{{ netris_lab_dir }}/collections"
     ANSIBLE_STDOUT_CALLBACK: default
   changed_when: true
 
@@ -27,7 +32,7 @@
     cmd: ansible-playbook playbooks/deploy.yml -e ew_fabric_enable={{ ew_fabric_enable }}
     chdir: "{{ netris_lab_dir }}"
   environment:
-    ANSIBLE_COLLECTIONS_PATHS: "{{ _collections_path }}"
+    ANSIBLE_COLLECTIONS_PATHS: "{{ _collections_path }}:{{ netris_lab_dir }}/collections"
     ANSIBLE_STDOUT_CALLBACK: default
   changed_when: true
 
@@ -36,6 +41,6 @@
     cmd: make verify
     chdir: "{{ netris_lab_dir }}"
   environment:
-    ANSIBLE_COLLECTIONS_PATHS: "{{ _collections_path }}"
+    ANSIBLE_COLLECTIONS_PATHS: "{{ _collections_path }}:{{ netris_lab_dir }}/collections"
     ANSIBLE_STDOUT_CALLBACK: default
   changed_when: false
