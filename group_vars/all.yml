@@ -34,7 +34,3 @@ ocp_base_domain: "osac.local"
 pull_secret_path: "/root/pull-secret"
 ssh_public_key_path: "/root/.ssh/id_rsa.pub"
 assisted_service_url: "http://localhost:8090"
-
-# osac-aap collection
-osac_aap_repo: "https://github.com/osac-project/osac-aap.git"
-osac_aap_dir: "/opt/osac-aap"

@@ -1,8 +1,11 @@
-.PHONY: all deploy configure install-ocp destroy
+.PHONY: all setup deploy configure install-ocp destroy
 
-all: deploy configure install-ocp
+all: setup deploy configure install-ocp
 
-deploy:
+setup:
+	ansible-galaxy collection install -r requirements.yml -p collections
+
+deploy: setup
 	ansible-playbook playbooks/deploy-lab.yml
 
 configure:

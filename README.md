@@ -36,7 +36,7 @@ Internet access for OCP image pulls flows through: hgx-00 → NS VNet → softga
 - **OpenShift pull secret** — place at `/root/pull-secret` (or set `pull_secret_path`)
 - **SSH key pair** at `/root/.ssh/id_rsa` and `/root/.ssh/id_rsa.pub`
 
-The [osac-aap](https://github.com/osac-project/osac-aap) collection (provides `netris.controller` Ansible roles) is cloned automatically by the `netris_configure` role. The netris-lab prerequisites (Go, Pulumi, OpenTofu, etc.) are installed automatically by `make deploy`.
+The `netris.controller` Ansible collection is installed automatically by `make setup` (via `requirements.yml`). The netris-lab prerequisites (Go, Pulumi, OpenTofu, etc.) are installed automatically by `make deploy`.
 
 ## Quick start
 

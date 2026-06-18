@@ -1,11 +1,4 @@
 ---
-- name: Clone osac-aap for netris.controller collection
-  ansible.builtin.git:
-    repo: "{{ osac_aap_repo }}"
-    dest: "{{ osac_aap_dir }}"
-    version: main
-  when: osac_aap_dir != ''
-
 - name: Authenticate to Netris controller
   ansible.builtin.include_role:
     name: netris.controller.auth
