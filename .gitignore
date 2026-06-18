@@ -3,6 +3,7 @@
 __pycache__/
 .vault_pass
 license.key
+license.zip
 pod.yml
 configmap.yml
 /root/pull-secret
