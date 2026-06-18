@@ -19,6 +19,7 @@
     chdir: "{{ netris_lab_dir }}"
   environment:
     ANSIBLE_COLLECTIONS_PATHS: "{{ _collections_path }}"
+    ANSIBLE_STDOUT_CALLBACK: default
   changed_when: true
 
 - name: Deploy netris-lab with East-West fabric disabled
@@ -27,6 +28,7 @@
     chdir: "{{ netris_lab_dir }}"
   environment:
     ANSIBLE_COLLECTIONS_PATHS: "{{ _collections_path }}"
+    ANSIBLE_STDOUT_CALLBACK: default
   changed_when: true
 
 - name: Verify netris-lab deployment
@@ -35,4 +37,5 @@
     chdir: "{{ netris_lab_dir }}"
   environment:
     ANSIBLE_COLLECTIONS_PATHS: "{{ _collections_path }}"
+    ANSIBLE_STDOUT_CALLBACK: default
   changed_when: false
