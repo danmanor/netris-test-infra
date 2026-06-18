@@ -1,5 +1,5 @@
 ---
 collections:
-- name: https://github.com/osac-project/osac-aap.git#collections/ansible_collections/netris/controller
+- name: https://github.com/osac-project/osac-aap.git#collections/ansible_collections/netris/controller,netris-controller-collection-roles
   type: git
 - name: ansible.posix
