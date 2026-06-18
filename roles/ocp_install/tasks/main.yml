@@ -24,24 +24,41 @@
     mode: "0600"
   no_log: true
 
+- name: Check if cluster already exists
+  ansible.builtin.shell:
+    cmd: aicli -u {{ assisted_service_url }} info cluster {{ ocp_cluster_name }}
+  register: _cluster_check
+  failed_when: false
+  changed_when: false
+
 - name: Create OCP SNO cluster
   ansible.builtin.command:
     cmd: aicli -u {{ assisted_service_url }} create cluster {{ ocp_cluster_name }} --paramfile /tmp/aicli-params.yml
+  when: _cluster_check.rc != 0
   changed_when: true
+
+- name: Check if infraenv already exists
+  ansible.builtin.shell:
+    cmd: aicli -u {{ assisted_service_url }} info infraenv {{ ocp_cluster_name }}_infra-env
+  register: _infraenv_check
+  failed_when: false
+  changed_when: false
 
 - name: Create infrastructure environment
   ansible.builtin.command:
     cmd: aicli -u {{ assisted_service_url }} create infraenv {{ ocp_cluster_name }}_infra-env --paramfile /tmp/aicli-params.yml
+  when: _infraenv_check.rc != 0
   changed_when: true
 
 - name: Wait for ISO generation
   ansible.builtin.pause:
     seconds: 60
+  when: _infraenv_check.rc != 0
 
 - name: Download discovery ISO
   ansible.builtin.command:
     cmd: aicli -u {{ assisted_service_url }} download iso {{ ocp_cluster_name }}_infra-env -p /var/lib/libvirt/images/
-  changed_when: true
+    creates: /var/lib/libvirt/images/{{ ocp_cluster_name }}_infra-env.iso
 
 - name: Find OCP server VM
   ansible.builtin.shell:
@@ -53,19 +70,35 @@
   ansible.builtin.set_fact:
     ocp_vm_name: "{{ _vm_lookup.stdout_lines[0] }}"
 
+- name: Check VM state
+  ansible.builtin.shell:
+    cmd: virsh domstate {{ ocp_vm_name }}
+  register: _vm_state
+  changed_when: false
+
+- name: Check if ISO is already attached
+  ansible.builtin.shell:
+    cmd: virsh domblklist {{ ocp_vm_name }} | grep -q "{{ ocp_cluster_name }}_infra-env.iso"
+  register: _iso_attached
+  failed_when: false
+  changed_when: false
+
 - name: Attach discovery ISO to VM
   ansible.builtin.command:
     cmd: virsh attach-disk {{ ocp_vm_name }} /var/lib/libvirt/images/{{ ocp_cluster_name }}_infra-env.iso sda --type cdrom --config
+  when: _iso_attached.rc != 0
   changed_when: true
 
 - name: Set boot order to CDROM first
   ansible.builtin.command:
     cmd: virt-xml {{ ocp_vm_name }} --edit --boot cdrom,hd
+  when: _vm_state.stdout | trim == 'shut off'
   changed_when: true
 
 - name: Start VM with discovery ISO
   ansible.builtin.command:
     cmd: virsh start {{ ocp_vm_name }}
+  when: _vm_state.stdout | trim == 'shut off'
   changed_when: true
 
 - name: Wait for host discovery
@@ -73,9 +106,16 @@
     cmd: aicli -u {{ assisted_service_url }} wait cluster {{ ocp_cluster_name }} --state ready
   changed_when: false
 
+- name: Check cluster status
+  ansible.builtin.shell:
+    cmd: aicli -u {{ assisted_service_url }} info cluster {{ ocp_cluster_name }} | grep -i status
+  register: _cluster_status
+  changed_when: false
+
 - name: Start OCP installation
   ansible.builtin.command:
     cmd: aicli -u {{ assisted_service_url }} start cluster {{ ocp_cluster_name }}
+  when: "'installed' not in _cluster_status.stdout | lower"
   changed_when: true
 
 - name: Wait for installation to complete
@@ -86,7 +126,7 @@
 - name: Download kubeconfig
   ansible.builtin.command:
     cmd: aicli -u {{ assisted_service_url }} download kubeconfig {{ ocp_cluster_name }}
-  changed_when: true
+    creates: "/root/kubeconfig.{{ ocp_cluster_name }}"
 
 - name: Create .kube directory
   ansible.builtin.file:
