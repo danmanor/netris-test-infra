@@ -203,7 +203,7 @@
 
 - name: Download kubeconfig
   ansible.builtin.command:
-    cmd: aicli -u {{ assisted_service_url }} download kubeconfig {{ ocp_cluster_name }}
+    cmd: aicli -u {{ assisted_service_url }} download kubeconfig {{ ocp_cluster_name }} -p /root/
     creates: "/root/kubeconfig.{{ ocp_cluster_name }}"
 
 - name: Create .kube directory
