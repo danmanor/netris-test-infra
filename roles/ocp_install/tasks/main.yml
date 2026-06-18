@@ -107,7 +107,7 @@
 
 - name: Wait for host discovery
   ansible.builtin.command:
-    cmd: aicli -u {{ assisted_service_url }} wait cluster {{ ocp_cluster_name }} --state ready
+    cmd: aicli -u {{ assisted_service_url }} wait cluster {{ ocp_cluster_name }} --status ready
   changed_when: false
 
 - name: Check cluster status
@@ -124,7 +124,7 @@
 
 - name: Wait for installation to complete
   ansible.builtin.command:
-    cmd: aicli -u {{ assisted_service_url }} wait cluster {{ ocp_cluster_name }} --state installed
+    cmd: aicli -u {{ assisted_service_url }} wait cluster {{ ocp_cluster_name }} --status installed
   changed_when: false
 
 - name: Download kubeconfig
