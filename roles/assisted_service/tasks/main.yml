@@ -1,16 +1,28 @@
 ---
-- name: Check if Assisted Service is already running
-  ansible.builtin.uri:
-    url: "{{ assisted_service_url }}/api/assisted-install/v2/clusters"
-    method: GET
-    status_code: [200]
+- name: Check if Assisted Service is already running with correct IP
+  ansible.builtin.shell:
+    cmd: podman exec assisted-installer-service env 2>/dev/null | grep -q "SERVICE_BASE_URL=http://{{ assisted_service_ip }}:8090"
   register: _ai_check
   failed_when: false
+  changed_when: false
+
+- name: Remove Assisted Service with wrong IP
+  ansible.builtin.command:
+    cmd: podman pod rm -f assisted-installer
+  when: _ai_check.rc != 0
+  register: _ai_remove
+  failed_when: false
+  changed_when: _ai_remove.rc == 0
+
+- name: Wait for pod cleanup
+  ansible.builtin.pause:
+    seconds: 5
+  when: _ai_remove is changed
 
 - name: Deploy local Assisted Service
   ansible.builtin.command:
     cmd: aicli create onprem -P onprem_ip={{ assisted_service_ip }}
-  when: _ai_check.status | default(0) != 200
+  when: _ai_check.rc != 0
   changed_when: true
 
 - name: Wait for Assisted Service API
