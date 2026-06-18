@@ -1,0 +1,3 @@
+[submodule "netris-lab"]
+	path = netris-lab
+	url = https://github.com/danmanor/netris-lab.git

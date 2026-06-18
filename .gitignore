@@ -1,0 +1,6 @@
+*.retry
+*.pyc
+__pycache__/
+.vault_pass
+license.key
+/root/pull-secret

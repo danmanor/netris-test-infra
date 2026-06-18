@@ -1,0 +1,106 @@
+---
+- name: Read pull secret
+  ansible.builtin.slurp:
+    src: "{{ pull_secret_path }}"
+  register: _pull_secret
+  no_log: true
+
+- name: Read SSH public key
+  ansible.builtin.slurp:
+    src: "{{ ssh_public_key_path }}"
+  register: _ssh_pub_key
+
+- name: Write aicli parameters file
+  ansible.builtin.copy:
+    content: |
+      sno: true
+      sno_disk: /dev/vda
+      base_dns_domain: {{ ocp_base_domain }}
+      openshift_version: "{{ ocp_version }}"
+      pull_secret: '{{ _pull_secret.content | b64decode | trim }}'
+      ssh_public_key: {{ _ssh_pub_key.content | b64decode | trim }}
+      network_type: OVNKubernetes
+    dest: /tmp/aicli-params.yml
+    mode: "0600"
+  no_log: true
+
+- name: Create OCP SNO cluster
+  ansible.builtin.command:
+    cmd: aicli -u {{ assisted_service_url }} create cluster {{ ocp_cluster_name }} --paramfile /tmp/aicli-params.yml
+  changed_when: true
+
+- name: Create infrastructure environment
+  ansible.builtin.command:
+    cmd: aicli -u {{ assisted_service_url }} create infraenv {{ ocp_cluster_name }}_infra-env --paramfile /tmp/aicli-params.yml
+  changed_when: true
+
+- name: Wait for ISO generation
+  ansible.builtin.pause:
+    seconds: 60
+
+- name: Download discovery ISO
+  ansible.builtin.command:
+    cmd: aicli -u {{ assisted_service_url }} download iso {{ ocp_cluster_name }}_infra-env -p /var/lib/libvirt/images/
+  changed_when: true
+
+- name: Find OCP server VM
+  ansible.builtin.shell:
+    cmd: virsh list --all --name | grep "{{ ocp_vm_name_pattern }}"
+  register: _vm_lookup
+  changed_when: false
+
+- name: Set VM name
+  ansible.builtin.set_fact:
+    ocp_vm_name: "{{ _vm_lookup.stdout_lines[0] }}"
+
+- name: Attach discovery ISO to VM
+  ansible.builtin.command:
+    cmd: virsh attach-disk {{ ocp_vm_name }} /var/lib/libvirt/images/{{ ocp_cluster_name }}_infra-env.iso sda --type cdrom --config
+  changed_when: true
+
+- name: Set boot order to CDROM first
+  ansible.builtin.command:
+    cmd: virt-xml {{ ocp_vm_name }} --edit --boot cdrom,hd
+  changed_when: true
+
+- name: Start VM with discovery ISO
+  ansible.builtin.command:
+    cmd: virsh start {{ ocp_vm_name }}
+  changed_when: true
+
+- name: Wait for host discovery
+  ansible.builtin.command:
+    cmd: aicli -u {{ assisted_service_url }} wait cluster {{ ocp_cluster_name }} --state ready
+  changed_when: false
+
+- name: Start OCP installation
+  ansible.builtin.command:
+    cmd: aicli -u {{ assisted_service_url }} start cluster {{ ocp_cluster_name }}
+  changed_when: true
+
+- name: Wait for installation to complete
+  ansible.builtin.command:
+    cmd: aicli -u {{ assisted_service_url }} wait cluster {{ ocp_cluster_name }} --state installed
+  changed_when: false
+
+- name: Download kubeconfig
+  ansible.builtin.command:
+    cmd: aicli -u {{ assisted_service_url }} download kubeconfig {{ ocp_cluster_name }}
+  changed_when: true
+
+- name: Create .kube directory
+  ansible.builtin.file:
+    path: /root/.kube
+    state: directory
+    mode: "0700"
+
+- name: Copy kubeconfig to default location
+  ansible.builtin.copy:
+    src: "/root/kubeconfig.{{ ocp_cluster_name }}"
+    dest: /root/.kube/config
+    remote_src: true
+    mode: "0600"
+
+- name: Report OCP installation complete
+  ansible.builtin.debug:
+    msg: "OCP SNO installed. Kubeconfig at /root/.kube/config"

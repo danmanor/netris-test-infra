@@ -1,0 +1,6 @@
+---
+- name: Deploy Netris lab
+  hosts: all
+  gather_facts: false
+  roles:
+    - lab_deploy

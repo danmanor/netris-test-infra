@@ -1,0 +1,38 @@
+---
+- name: Deploy local Assisted Service
+  ansible.builtin.command:
+    cmd: aicli create onprem
+  changed_when: true
+
+- name: Wait for Assisted Service API
+  ansible.builtin.uri:
+    url: "{{ assisted_service_url }}/api/assisted-install/v2/clusters"
+    method: GET
+    status_code: [200]
+  register: _ai_ready
+  until: _ai_ready is not failed
+  retries: 30
+  delay: 10
+
+- name: Install dnsmasq
+  ansible.builtin.dnf:
+    name: dnsmasq
+    state: present
+
+- name: Configure DNS for OCP SNO
+  ansible.builtin.copy:
+    content: |
+      address=/api.{{ ocp_cluster_name }}.{{ ocp_base_domain }}/{{ ocp_node_ip }}
+      address=/.apps.{{ ocp_cluster_name }}.{{ ocp_base_domain }}/{{ ocp_node_ip }}
+    dest: /etc/dnsmasq.d/ocp-sno.conf
+    mode: "0644"
+
+- name: Enable and restart dnsmasq
+  ansible.builtin.systemd:
+    name: dnsmasq
+    state: restarted
+    enabled: true
+
+- name: Report Assisted Service status
+  ansible.builtin.debug:
+    msg: "Assisted Service ready at {{ assisted_service_url }}, DNS configured for {{ ocp_cluster_name }}.{{ ocp_base_domain }}"

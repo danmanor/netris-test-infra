@@ -1,0 +1,68 @@
+---
+- name: Find OCP server VM
+  ansible.builtin.shell:
+    cmd: virsh list --all --name | grep "{{ ocp_vm_name_pattern }}"
+  register: _vm_lookup
+  changed_when: false
+
+- name: Set VM name
+  ansible.builtin.set_fact:
+    ocp_vm_name: "{{ _vm_lookup.stdout_lines[0] }}"
+
+- name: Shut down VM
+  ansible.builtin.command:
+    cmd: virsh destroy {{ ocp_vm_name }}
+  register: _destroy
+  failed_when: _destroy.rc != 0 and 'domain is not running' not in _destroy.stderr
+  changed_when: _destroy.rc == 0
+
+- name: Set maximum vCPUs
+  ansible.builtin.command:
+    cmd: virsh setvcpus {{ ocp_vm_name }} {{ ocp_server_vcpu }} --config --maximum
+  changed_when: true
+
+- name: Set vCPUs
+  ansible.builtin.command:
+    cmd: virsh setvcpus {{ ocp_vm_name }} {{ ocp_server_vcpu }} --config
+  changed_when: true
+
+- name: Set maximum memory
+  ansible.builtin.command:
+    cmd: virsh setmaxmem {{ ocp_vm_name }} {{ ocp_server_memory_gb }}G --config
+  changed_when: true
+
+- name: Set memory
+  ansible.builtin.command:
+    cmd: virsh setmem {{ ocp_vm_name }} {{ ocp_server_memory_gb }}G --config
+  changed_when: true
+
+- name: Create blank OCP installation disk
+  ansible.builtin.command:
+    cmd: qemu-img create -f qcow2 /var/lib/libvirt/images/hgx-00-ocp.qcow2 {{ ocp_install_disk_gb }}G
+    creates: /var/lib/libvirt/images/hgx-00-ocp.qcow2
+
+- name: Create LVM storage disk
+  ansible.builtin.command:
+    cmd: qemu-img create -f qcow2 /var/lib/libvirt/images/hgx-00-lvm.qcow2 {{ ocp_lvm_disk_gb }}G
+    creates: /var/lib/libvirt/images/hgx-00-lvm.qcow2
+
+- name: Detach original disk
+  ansible.builtin.command:
+    cmd: virsh detach-disk {{ ocp_vm_name }} vda --config
+  register: _detach
+  failed_when: _detach.rc != 0 and 'not found' not in _detach.stderr
+  changed_when: _detach.rc == 0
+
+- name: Attach OCP installation disk
+  ansible.builtin.command:
+    cmd: virsh attach-disk {{ ocp_vm_name }} /var/lib/libvirt/images/hgx-00-ocp.qcow2 vda --persistent --subdriver qcow2
+  changed_when: true
+
+- name: Attach LVM storage disk
+  ansible.builtin.command:
+    cmd: virsh attach-disk {{ ocp_vm_name }} /var/lib/libvirt/images/hgx-00-lvm.qcow2 vdb --persistent --subdriver qcow2
+  changed_when: true
+
+- name: Report VM configuration
+  ansible.builtin.debug:
+    msg: "VM {{ ocp_vm_name }} resized: {{ ocp_server_vcpu }} vCPU, {{ ocp_server_memory_gb }}G RAM, {{ ocp_install_disk_gb }}G + {{ ocp_lvm_disk_gb }}G disk"
