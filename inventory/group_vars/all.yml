@@ -22,7 +22,7 @@ ocp_gateway: "192.168.40.1/24"
 ocp_node_ip: "192.168.40.2"
 ocp_server_ports:
   - name: "eth9@hgx-pod00-su0-h00"
-    vlan: "untagged"
+    accessMode: true
 
 # OCP Installation
 ocp_version: "4.17"
