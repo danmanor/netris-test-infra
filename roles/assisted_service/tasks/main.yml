@@ -14,6 +14,15 @@
   failed_when: false
   changed_when: _ai_remove.rc == 0
 
+- name: Remove stale aicli config files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /root/pod.yml
+    - /root/configmap.yml
+  when: _ai_check.rc != 0
+
 - name: Wait for pod cleanup
   ansible.builtin.pause:
     seconds: 5
