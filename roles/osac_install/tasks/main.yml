@@ -4,6 +4,7 @@
     repo: "{{ osac_installer_repo }}"
     dest: "{{ osac_installer_dir }}"
     version: "{{ osac_installer_branch }}"
+    force: true
 
 - name: Initialize submodules
   ansible.builtin.command:
