@@ -23,8 +23,6 @@ ocp_node_ip: "192.168.40.2"
 ocp_server_ports:
   - name: "eth9@hgx-pod00-su0-h00"
     vlan: "untagged"
-  - name: "eth10@hgx-pod00-su0-h00"
-    vlan: "untagged"
 
 # OCP Installation
 ocp_version: "4.17"
