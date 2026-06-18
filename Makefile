@@ -1,6 +1,6 @@
-.PHONY: all prerequisites deploy configure install-ocp destroy vendor-update
+.PHONY: all prerequisites deploy configure install-ocp install-osac destroy vendor-update
 
-all: prerequisites deploy configure install-ocp
+all: prerequisites deploy configure install-ocp install-osac
 
 prerequisites:
 	dnf install -y ansible-core python3-pip libvirt virt-install qemu-kvm git dnsmasq podman
@@ -14,6 +14,9 @@ configure:
 
 install-ocp:
 	ansible-playbook playbooks/install-ocp.yml
+
+install-osac:
+	ansible-playbook playbooks/install-osac.yml
 
 destroy:
 	ansible-playbook playbooks/destroy.yml

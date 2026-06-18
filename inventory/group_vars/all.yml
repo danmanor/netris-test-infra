@@ -34,3 +34,12 @@ pull_secret_path: "/root/pull-secret"
 ssh_public_key_path: "/root/.ssh/id_rsa.pub"
 assisted_service_url: "http://localhost:8090"
 assisted_service_ip: "198.51.100.9"
+
+# OSAC Installer
+osac_installer_repo: "https://github.com/osac-project/osac-installer.git"
+osac_installer_branch: "main"
+osac_installer_dir: "/opt/osac-installer"
+osac_namespace: "osac"
+osac_kustomize_overlay: "vmaas-ci"
+osac_values_file: "values/vmaas-ci.yaml"
+osac_license_path: "/tmp/license.zip"
