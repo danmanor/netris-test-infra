@@ -59,6 +59,10 @@
   ansible.builtin.command:
     cmd: aicli -u {{ assisted_service_url }} download iso {{ ocp_cluster_name }}_infra-env -p /var/lib/libvirt/images/
     creates: /var/lib/libvirt/images/{{ ocp_cluster_name }}_infra-env.iso
+  register: _iso_download
+  until: _iso_download.rc == 0
+  retries: 30
+  delay: 30
 
 - name: Find OCP server VM
   ansible.builtin.shell:
