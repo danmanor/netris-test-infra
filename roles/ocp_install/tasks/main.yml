@@ -20,6 +20,12 @@
   ansible.builtin.set_fact:
     ocp_vm_name: "{{ _vm_lookup.stdout_lines[0] }}"
 
+- name: Get mgmt NIC MAC address
+  ansible.builtin.shell:
+    cmd: virsh domiflist {{ ocp_vm_name }} | grep bridge | awk '{print $5}'
+  register: _mgmt_mac
+  changed_when: false
+
 - name: Get VNet NIC MAC address
   ansible.builtin.shell:
     cmd: virsh domiflist {{ ocp_vm_name }} | grep udp | head -1 | awk '{print $5}'
@@ -32,6 +38,14 @@
       static_network_config:
         - network_yaml:
             interfaces:
+              - name: ens4
+                type: ethernet
+                state: up
+                ipv4:
+                  enabled: true
+                  dhcp: true
+                ipv6:
+                  enabled: false
               - name: ens5
                 type: ethernet
                 state: up
@@ -52,7 +66,10 @@
                 - destination: 0.0.0.0/0
                   next-hop-address: {{ ocp_gateway | ansible.utils.ipaddr('address') }}
                   next-hop-interface: ens5
+                  metric: 50
           mac_interface_map:
+            - logical_nic_name: ens4
+              mac_address: {{ _mgmt_mac.stdout }}
             - logical_nic_name: ens5
               mac_address: {{ _vnet_mac.stdout }}
     dest: /tmp/aicli-static-network.yml
