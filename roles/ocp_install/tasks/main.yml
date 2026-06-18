@@ -147,7 +147,7 @@
 
 - name: Set boot order to CDROM first
   ansible.builtin.command:
-    cmd: virt-xml {{ ocp_vm_name }} --edit --boot cdrom,hd
+    cmd: virt-xml {{ ocp_vm_name }} --edit --boot hd,cdrom
   when: _vm_state.stdout | trim != 'running'
   changed_when: true
 
