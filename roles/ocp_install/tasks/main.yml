@@ -164,14 +164,14 @@
 
 - name: Check cluster status
   ansible.builtin.shell:
-    cmd: aicli -u {{ assisted_service_url }} info cluster {{ ocp_cluster_name }} | grep -i status
+    cmd: "aicli -u {{ assisted_service_url }} info cluster {{ ocp_cluster_name }} | grep '^status:' | awk '{print $2}'"
   register: _cluster_status
   changed_when: false
 
 - name: Start OCP installation
   ansible.builtin.command:
     cmd: aicli -u {{ assisted_service_url }} start cluster {{ ocp_cluster_name }}
-  when: "'installed' not in _cluster_status.stdout | lower"
+  when: _cluster_status.stdout | trim != 'installed'
   changed_when: true
 
 - name: Wait for installation to complete
