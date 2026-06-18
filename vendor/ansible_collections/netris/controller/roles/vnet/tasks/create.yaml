@@ -19,17 +19,17 @@
 
 - name: Find V-Net by name
   ansible.builtin.set_fact:
-    _existing_vnet: >-
+    _existing_vnet_list: >-
       {{ (_vnet_list_resp.json.data | default([]))
          | selectattr('name', 'equalto', vnet_name)
-         | list | first | default(none) }}
+         | list }}
   when: _vnet_list_resp.json is mapping
 
 - name: Set V-Net facts from existing V-Net (skip creation)
   ansible.builtin.set_fact:
-    vnet_id: "{{ _existing_vnet.id }}"
+    vnet_id: "{{ _existing_vnet_list[0].id }}"
     vnet_already_existed: true
-  when: _existing_vnet is defined and _existing_vnet is not none
+  when: _existing_vnet_list | default([]) | length > 0
 
 - name: Build V-Net body
   ansible.builtin.set_fact:
@@ -43,7 +43,7 @@
       vlan: "{{ vnet_vlan_id | default('auto') }}"
       tenant:
         id: "{{ vnet_tenant_id }}"
-  when: _existing_vnet is not defined or _existing_vnet is none
+  when: _existing_vnet_list | default([]) | length == 0
 
 - name: Add gateway to V-Net body
   ansible.builtin.set_fact:
@@ -52,7 +52,7 @@
         'gateways': [{'prefix': vnet_gateway}]
       }) }}
   when:
-    - _existing_vnet is not defined or _existing_vnet is none
+    - _existing_vnet_list | default([]) | length == 0
     - vnet_gateway is defined
 
 - name: Add ports to V-Net body
@@ -62,7 +62,7 @@
         'ports': vnet_ports
       }) }}
   when:
-    - _existing_vnet is not defined or _existing_vnet is none
+    - _existing_vnet_list | default([]) | length == 0
     - vnet_ports is defined
 
 - name: Create V-Net
@@ -79,7 +79,7 @@
     timeout: "{{ netris_timeout | default(30) }}"
     validate_certs: "{{ netris_validate_certs | default(true) }}"
   register: _vnet_create_resp
-  when: _existing_vnet is not defined or _existing_vnet is none
+  when: _existing_vnet_list | default([]) | length == 0
   no_log: true
 
 - name: Set V-Net facts from create response
@@ -87,7 +87,7 @@
     vnet_id: "{{ _vnet_create_resp.json.data.id | default(_vnet_create_resp.json.data) }}"
     vnet_already_existed: false
   when:
-    - _existing_vnet is not defined or _existing_vnet is none
+    - _existing_vnet_list | default([]) | length == 0
     - _vnet_create_resp is not skipped
     - _vnet_create_resp is changed or (_vnet_create_resp.status | default(0)) in [200, 201]
     - _vnet_create_resp.json is mapping

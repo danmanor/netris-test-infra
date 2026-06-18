@@ -19,16 +19,16 @@
 
 - name: Find IPAM subnet by name
   ansible.builtin.set_fact:
-    _existing_ipam_subnet: >-
+    _existing_ipam_subnet_list: >-
       {{ (_ipam_subnets_resp.json.data | default([]))
          | selectattr('name', 'equalto', ipam_name)
-         | list | first | default(none) }}
+         | list }}
 
 - name: Set IPAM facts from existing subnet (skip creation)
   ansible.builtin.set_fact:
-    ipam_subnet_id: "{{ _existing_ipam_subnet.id }}"
+    ipam_subnet_id: "{{ _existing_ipam_subnet_list[0].id }}"
     ipam_already_existed: true
-  when: _existing_ipam_subnet is not none
+  when: _existing_ipam_subnet_list | default([]) | length > 0
 
 - name: Create IPAM subnet
   ansible.builtin.uri:
@@ -56,7 +56,7 @@
     timeout: "{{ netris_timeout | default(30) }}"
     validate_certs: "{{ netris_validate_certs | default(true) }}"
   register: _ipam_create_resp
-  when: _existing_ipam_subnet is none
+  when: _existing_ipam_subnet_list | default([]) | length == 0
   no_log: true
 
 - name: Set IPAM facts from create response
@@ -64,7 +64,7 @@
     ipam_subnet_id: "{{ _ipam_create_resp.json.data.id | default(_ipam_create_resp.json.data) }}"
     ipam_already_existed: false
   when:
-    - _existing_ipam_subnet is none
+    - _existing_ipam_subnet_list | default([]) | length == 0
     - _ipam_create_resp is not skipped
     - _ipam_create_resp is changed or (_ipam_create_resp.status | default(0)) in [200, 201]
     - _ipam_create_resp.json is mapping
