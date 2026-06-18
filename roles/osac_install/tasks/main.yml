@@ -31,6 +31,13 @@
     remote_src: true
     mode: "0644"
 
+- name: Install oc CLI
+  ansible.builtin.shell:
+    cmd: |
+      curl -fsSL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/openshift-client-linux.tar.gz \
+        | tar xzf - -C /usr/local/bin oc kubectl
+    creates: /usr/local/bin/oc
+
 - name: Install helm
   ansible.builtin.command:
     cmd: bash -c "curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash"
