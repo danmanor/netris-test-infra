@@ -36,13 +36,13 @@
     _vnet_body:
       name: "{{ vnet_name }}"
       vpc:
-        id: "{{ vnet_vpc_id }}"
+        id: "{{ vnet_vpc_id | int }}"
       sites:
-        - id: "{{ vnet_site_id }}"
+        - id: "{{ vnet_site_id | int }}"
       state: active
       vlan: "{{ vnet_vlan_id | default('auto') }}"
       tenant:
-        id: "{{ vnet_tenant_id }}"
+        id: "{{ vnet_tenant_id | int }}"
   when: _existing_vnet_list | default([]) | length == 0
 
 - name: Add gateway to V-Net body
