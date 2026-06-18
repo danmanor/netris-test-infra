@@ -23,6 +23,8 @@ ocp_node_ip: "192.168.40.2"
 ocp_server_ports:
   - name: "eth9@hgx-pod00-su0-h00"
     accessMode: true
+ocp_snat_ip: "198.51.100.1"
+ocp_dnat_ip: "198.51.100.2"
 
 # OCP Installation
 ocp_version: "4.17"

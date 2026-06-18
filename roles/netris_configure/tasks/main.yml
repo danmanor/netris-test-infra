@@ -58,6 +58,31 @@
     vnet_dhcp_enabled: true
     vnet_ports: "{{ ocp_server_ports }}"
 
+- name: Create SNAT rule for OCP VNet
+  ansible.builtin.include_role:
+    name: netris.controller.nat
+  vars:
+    nat_name: "{{ ocp_vpc_name }}-snat"
+    nat_state: present
+    nat_action: snat
+    nat_site_id: 1
+    nat_vpc_id: "{{ vpc_id }}"
+    nat_source_address: "{{ ocp_subnet_cidr }}"
+    nat_snat_to_ip: "{{ ocp_snat_ip }}"
+
+- name: Create DNAT rule for OCP (API + Ingress)
+  ansible.builtin.include_role:
+    name: netris.controller.nat
+  vars:
+    nat_name: "{{ ocp_vpc_name }}-dnat"
+    nat_state: present
+    nat_action: dnat
+    nat_protocol: all
+    nat_site_id: 1
+    nat_vpc_id: "{{ vpc_id }}"
+    nat_destination_address: "{{ ocp_dnat_ip }}/32"
+    nat_dnat_to_ip: "{{ ocp_node_ip }}"
+
 - name: Report Netris networking configuration
   ansible.builtin.debug:
-    msg: "Netris configured: VPC={{ ocp_vpc_name }}, VNet={{ ocp_vnet_name }}, Subnet={{ ocp_subnet_cidr }}"
+    msg: "Netris configured: VPC={{ ocp_vpc_name }}, VNet={{ ocp_vnet_name }}, Subnet={{ ocp_subnet_cidr }}, DNAT={{ ocp_dnat_ip }} → {{ ocp_node_ip }}"
