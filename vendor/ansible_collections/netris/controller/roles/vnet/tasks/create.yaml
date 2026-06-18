@@ -50,7 +50,7 @@
   ansible.builtin.set_fact:
     _vnet_body: >-
       {{ _vnet_body | combine({
-        'gateways': [{'prefix': vnet_gateway}]
+        'gateways': [{'prefix': vnet_gateway, 'dhcpEnabled': vnet_dhcp_enabled | default(false)}]
       }) }}
   when:
     - _existing_vnet_list | default([]) | length == 0

@@ -55,6 +55,7 @@
     vnet_site_id: 1
     vnet_tenant_id: 1
     vnet_gateway: "{{ ocp_gateway }}"
+    vnet_dhcp_enabled: true
     vnet_ports: "{{ ocp_server_ports }}"
 
 - name: Report Netris networking configuration
