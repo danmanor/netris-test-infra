@@ -69,16 +69,14 @@
 
 - name: Check which disks are attached
   ansible.builtin.shell:
-    cmd: virsh domblklist {{ ocp_vm_name }} --details | awk '{print $3}' | tail -n +3
+    cmd: virsh domblklist {{ ocp_vm_name }}
   register: _attached_disks
   changed_when: false
 
 - name: Detach original disk
   ansible.builtin.command:
     cmd: virsh detach-disk {{ ocp_vm_name }} vda --config
-  when: >
-    '/var/lib/libvirt/images/hgx-00-ocp.qcow2' not in _attached_disks.stdout
-    and _attached_disks.stdout_lines | length > 0
+  when: "'hgx-00-ocp.qcow2' not in _attached_disks.stdout"
   register: _detach
   failed_when: _detach.rc != 0 and 'not found' not in _detach.stderr
   changed_when: _detach.rc == 0
@@ -86,13 +84,13 @@
 - name: Attach OCP installation disk
   ansible.builtin.command:
     cmd: virsh attach-disk {{ ocp_vm_name }} /var/lib/libvirt/images/hgx-00-ocp.qcow2 vda --persistent --subdriver qcow2
-  when: "'/var/lib/libvirt/images/hgx-00-ocp.qcow2' not in _attached_disks.stdout"
+  when: "'hgx-00-ocp.qcow2' not in _attached_disks.stdout"
   changed_when: true
 
 - name: Attach LVM storage disk
   ansible.builtin.command:
     cmd: virsh attach-disk {{ ocp_vm_name }} /var/lib/libvirt/images/hgx-00-lvm.qcow2 vdb --persistent --subdriver qcow2
-  when: "'/var/lib/libvirt/images/hgx-00-lvm.qcow2' not in _attached_disks.stdout"
+  when: "'hgx-00-lvm.qcow2' not in _attached_disks.stdout"
   changed_when: true
 
 - name: Report VM configuration
