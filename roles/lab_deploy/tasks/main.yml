@@ -18,6 +18,13 @@
     cmd: ansible-galaxy collection install -r {{ inventory_dir }}/../requirements.yml -p {{ netris_lab_dir }}/collections --force
   changed_when: true
 
+- name: Override netris-lab requirements.yml with ours
+  ansible.builtin.copy:
+    src: "{{ inventory_dir }}/../requirements.yml"
+    dest: "{{ netris_lab_dir }}/requirements.yml"
+    remote_src: true
+    mode: "0644"
+
 - name: Run make setup (prerequisites + cache)
   ansible.builtin.command:
     cmd: make setup
