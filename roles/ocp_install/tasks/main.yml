@@ -10,6 +10,54 @@
     src: "{{ ssh_public_key_path }}"
   register: _ssh_pub_key
 
+- name: Find OCP server VM
+  ansible.builtin.shell:
+    cmd: virsh list --all --name | grep "{{ ocp_vm_name_pattern }}"
+  register: _vm_lookup
+  changed_when: false
+
+- name: Set VM name
+  ansible.builtin.set_fact:
+    ocp_vm_name: "{{ _vm_lookup.stdout_lines[0] }}"
+
+- name: Get VNet NIC MAC address
+  ansible.builtin.shell:
+    cmd: virsh domiflist {{ ocp_vm_name }} | grep udp | head -1 | awk '{print $5}'
+  register: _vnet_mac
+  changed_when: false
+
+- name: Write static network config
+  ansible.builtin.copy:
+    content: |
+      static_network_config:
+        - network_yaml:
+            interfaces:
+              - name: ens5
+                type: ethernet
+                state: up
+                ipv4:
+                  enabled: true
+                  dhcp: false
+                  address:
+                    - ip: {{ ocp_node_ip }}
+                      prefix-length: {{ ocp_subnet_cidr | ansible.utils.ipaddr('prefix') }}
+                ipv6:
+                  enabled: false
+            dns-resolver:
+              config:
+                server:
+                  - 8.8.8.8
+            routes:
+              config:
+                - destination: 0.0.0.0/0
+                  next-hop-address: {{ ocp_gateway | ansible.utils.ipaddr('address') }}
+                  next-hop-interface: ens5
+          mac_interface_map:
+            - logical_nic_name: ens5
+              mac_address: {{ _vnet_mac.stdout }}
+    dest: /tmp/aicli-static-network.yml
+    mode: "0600"
+
 - name: Write aicli parameters file
   ansible.builtin.copy:
     content: |
@@ -20,6 +68,7 @@
       pull_secret: '{{ _pull_secret.content | b64decode | trim }}'
       ssh_public_key: {{ _ssh_pub_key.content | b64decode | trim }}
       network_type: OVNKubernetes
+      static_network_config: /tmp/aicli-static-network.yml
     dest: /tmp/aicli-params.yml
     mode: "0600"
   no_log: true
@@ -64,23 +113,26 @@
   retries: 30
   delay: 30
 
-- name: Find OCP server VM
-  ansible.builtin.shell:
-    cmd: virsh list --all --name | grep "{{ ocp_vm_name_pattern }}"
-  register: _vm_lookup
-  changed_when: false
-
-- name: Set VM name
-  ansible.builtin.set_fact:
-    ocp_vm_name: "{{ _vm_lookup.stdout_lines[0] }}"
-
 - name: Check VM state
   ansible.builtin.shell:
     cmd: virsh domstate {{ ocp_vm_name }}
   register: _vm_state
   changed_when: false
 
-- name: Check if ISO is already attached
+- name: Shut down VM if running
+  ansible.builtin.command:
+    cmd: virsh destroy {{ ocp_vm_name }}
+  when: _vm_state.stdout | trim == 'running'
+  changed_when: true
+
+- name: Detach old cloud-init ISO if present
+  ansible.builtin.command:
+    cmd: virsh detach-disk {{ ocp_vm_name }} hdd --config
+  register: _detach_cloudinit
+  failed_when: false
+  changed_when: _detach_cloudinit.rc == 0
+
+- name: Check if discovery ISO is already attached
   ansible.builtin.shell:
     cmd: virsh domblklist {{ ocp_vm_name }} | grep -q "{{ ocp_cluster_name }}_infra-env.iso"
   register: _iso_attached
@@ -96,13 +148,13 @@
 - name: Set boot order to CDROM first
   ansible.builtin.command:
     cmd: virt-xml {{ ocp_vm_name }} --edit --boot cdrom,hd
-  when: _vm_state.stdout | trim == 'shut off'
+  when: _vm_state.stdout | trim != 'running'
   changed_when: true
 
 - name: Start VM with discovery ISO
   ansible.builtin.command:
     cmd: virsh start {{ ocp_vm_name }}
-  when: _vm_state.stdout | trim == 'shut off'
+  when: _vm_state.stdout | trim != 'running'
   changed_when: true
 
 - name: Wait for host discovery
