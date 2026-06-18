@@ -15,7 +15,7 @@
 
 - name: Install collections into netris-lab
   ansible.builtin.command:
-    cmd: ansible-galaxy collection install -r requirements.yml -p {{ netris_lab_dir }}/collections --force
+    cmd: ansible-galaxy collection install -r {{ inventory_dir }}/../requirements.yml -p {{ netris_lab_dir }}/collections --force
   changed_when: true
 
 - name: Run make setup (prerequisites + cache)
