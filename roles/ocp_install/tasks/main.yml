@@ -69,9 +69,9 @@
                   metric: 50
           mac_interface_map:
             - logical_nic_name: ens4
-              mac_address: {{ _mgmt_mac.stdout }}
+              mac_address: "{{ _mgmt_mac.stdout }}"
             - logical_nic_name: ens5
-              mac_address: {{ _vnet_mac.stdout }}
+              mac_address: "{{ _vnet_mac.stdout }}"
     dest: /tmp/aicli-static-network.yml
     mode: "0600"
 
