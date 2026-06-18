@@ -2,3 +2,4 @@
 collections:
 - name: https://github.com/osac-project/osac-aap.git#collections/ansible_collections/netris/controller
   type: git
+- name: ansible.posix

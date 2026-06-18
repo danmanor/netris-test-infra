@@ -1,5 +1,5 @@
 # Netris Lab
-netris_lab_dir: "{{ playbook_dir }}/../netris-lab"
+netris_lab_dir: "{{ inventory_dir }}/../netris-lab"
 ew_fabric_enable: 0
 
 # Netris Controller
