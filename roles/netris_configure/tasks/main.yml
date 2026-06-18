@@ -23,20 +23,11 @@
     vpc_state: present
     vpc_tenant_id: 1
 
-- name: Create IPAM allocation for OCP
-  ansible.builtin.include_role:
-    name: netris.controller.ipam
-  vars:
-    ipam_state: create_allocation
-    ipam_name: "{{ ocp_vpc_name }}-allocation"
-    ipam_cidr: "{{ ocp_subnet_cidr }}"
-    ipam_tenant_id: 1
-
 - name: Create IPAM subnet for OCP
   ansible.builtin.include_role:
     name: netris.controller.ipam
   vars:
-    ipam_state: create_subnet
+    ipam_state: create
     ipam_name: "{{ ocp_vpc_name }}-subnet"
     ipam_cidr: "{{ ocp_subnet_cidr }}"
     ipam_purpose: common
