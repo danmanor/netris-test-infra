@@ -27,7 +27,7 @@
   ansible.builtin.include_role:
     name: netris.controller.ipam
   vars:
-    ipam_state: create
+    ipam_state: create_subnet
     ipam_name: "{{ ocp_vpc_name }}-subnet"
     ipam_cidr: "{{ ocp_subnet_cidr }}"
     ipam_purpose: common

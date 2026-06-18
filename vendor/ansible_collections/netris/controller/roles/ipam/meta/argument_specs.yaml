@@ -4,7 +4,7 @@ argument_specs:
     options:
       ipam_state:
         type: str
-        choices: [read, create, delete]
+        choices: [read, create_allocation, create_subnet, delete_allocation, delete_subnet]
         default: read
         description: "IPAM operation to perform."
 
