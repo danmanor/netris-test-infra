@@ -19,6 +19,8 @@
     path: "{{ item }}"
     state: absent
   loop:
+    - "{{ playbook_dir }}/pod.yml"
+    - "{{ playbook_dir }}/configmap.yml"
     - /root/pod.yml
     - /root/configmap.yml
   when: _ai_check.rc != 0
