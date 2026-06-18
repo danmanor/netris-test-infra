@@ -3,7 +3,7 @@
 all: setup deploy configure install-ocp
 
 prerequisites:
-	dnf install -y ansible-core python3-pip libvirt virt-install qemu-kvm git dnsmasq
+	dnf install -y ansible-core python3-pip libvirt virt-install qemu-kvm git dnsmasq podman
 	pip3 install aicli
 
 setup: prerequisites
