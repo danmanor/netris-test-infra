@@ -9,20 +9,30 @@
     msg: "netris-lab directory not found at {{ netris_lab_dir }}"
   when: not _lab_dir.stat.exists
 
+- name: Get collections path
+  ansible.builtin.set_fact:
+    _collections_path: "{{ lookup('config', 'COLLECTIONS_PATHS') | join(':') }}"
+
 - name: Run make setup (prerequisites + cache)
   ansible.builtin.command:
     cmd: make setup
     chdir: "{{ netris_lab_dir }}"
+  environment:
+    ANSIBLE_COLLECTIONS_PATHS: "{{ _collections_path }}"
   changed_when: true
 
 - name: Deploy netris-lab with East-West fabric disabled
   ansible.builtin.command:
     cmd: ansible-playbook playbooks/deploy.yml -e ew_fabric_enable={{ ew_fabric_enable }}
     chdir: "{{ netris_lab_dir }}"
+  environment:
+    ANSIBLE_COLLECTIONS_PATHS: "{{ _collections_path }}"
   changed_when: true
 
 - name: Verify netris-lab deployment
   ansible.builtin.command:
     cmd: make verify
     chdir: "{{ netris_lab_dir }}"
+  environment:
+    ANSIBLE_COLLECTIONS_PATHS: "{{ _collections_path }}"
   changed_when: false
