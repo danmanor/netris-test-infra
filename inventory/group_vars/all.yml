@@ -27,7 +27,7 @@ ocp_snat_ip: "198.51.100.1"
 ocp_dnat_ip: "198.51.100.2"
 
 # OCP Installation
-ocp_version: "4.17"
+ocp_version: "4.21"
 ocp_cluster_name: "ocp-sno"
 ocp_base_domain: "osac.local"
 pull_secret_path: "/root/pull-secret"
