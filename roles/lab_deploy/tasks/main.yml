@@ -24,10 +24,8 @@
     name: prerequisites
 
 - name: Cache container and cloud images
-  ansible.builtin.command:
-    cmd: make cache
-    chdir: "{{ netris_lab_dir }}"
-  changed_when: true
+  ansible.builtin.include_role:
+    name: cache
 
 - name: Deploy K3s and Netris controller
   ansible.builtin.include_role:
@@ -46,7 +44,5 @@
     name: connectivity
 
 - name: Verify netris-lab deployment
-  ansible.builtin.command:
-    cmd: make verify
-    chdir: "{{ netris_lab_dir }}"
-  changed_when: false
+  ansible.builtin.include_role:
+    name: verify
