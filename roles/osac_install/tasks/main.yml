@@ -52,6 +52,23 @@
       chmod +x /usr/local/bin/osac
     creates: /usr/local/bin/osac
 
+- name: Get cluster apps domain
+  ansible.builtin.shell:
+    cmd: oc get ingresses.config/cluster -o jsonpath='{.spec.domain}'
+  environment:
+    KUBECONFIG: /root/.kube/config
+  register: _apps_domain
+  changed_when: false
+
+- name: Set fulfillment hostnames in values file
+  ansible.builtin.replace:
+    path: "{{ osac_installer_dir }}/{{ osac_values_file }}"
+    regexp: "{{ item.key }}:.*"
+    replace: "{{ item.key }}: fulfillment-{{ item.suffix }}-{{ osac_namespace }}.{{ _apps_domain.stdout }}"
+  loop:
+    - { key: "externalHostname", suffix: "api" }
+    - { key: "internalHostname", suffix: "internal-api" }
+
 - name: Run OSAC setup.sh
   ansible.builtin.command:
     cmd: ./scripts/setup.sh
