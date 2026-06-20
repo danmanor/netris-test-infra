@@ -1,0 +1,21 @@
+---
+- name: Load netris-lab variables
+  ansible.builtin.include_vars:
+    file: "{{ netris_lab_dir }}/group_vars/all.yml"
+
+- name: Pre-flight checks
+  ansible.builtin.include_tasks: "{{ role_path }}/../lab_deploy/tasks/preflight.yml"
+
+- name: Install Ansible collections
+  ansible.builtin.command:
+    cmd: ansible-galaxy collection install -r requirements.yml -p collections --force
+    chdir: "{{ netris_lab_dir }}"
+  changed_when: false
+
+- name: Run prerequisites
+  ansible.builtin.include_role:
+    name: prerequisites
+
+- name: Cache container and cloud images
+  ansible.builtin.include_role:
+    name: cache

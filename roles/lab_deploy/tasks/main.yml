@@ -6,20 +6,6 @@
 - name: Pre-flight checks
   ansible.builtin.include_tasks: preflight.yml
 
-- name: Install Ansible collections
-  ansible.builtin.command:
-    cmd: ansible-galaxy collection install -r requirements.yml -p collections --force
-    chdir: "{{ netris_lab_dir }}"
-  changed_when: false
-
-- name: Run prerequisites
-  ansible.builtin.include_role:
-    name: prerequisites
-
-- name: Cache container and cloud images
-  ansible.builtin.include_role:
-    name: cache
-
 - name: Deploy K3s and Netris controller
   ansible.builtin.include_role:
     name: k3s_controller
