@@ -125,25 +125,16 @@
     _netris_ctl_url: "http://192.168.16.254:{{ _traefik_nodeport.stdout }}"
 
 - name: Authenticate to Netris controller
-  ansible.builtin.uri:
-    url: "{{ _netris_ctl_url }}/api/auth"
-    method: POST
-    body_format: json
-    body:
-      login: "{{ netris_username }}"
-      password: "{{ netris_password }}"
-    validate_certs: false
-  register: _netris_auth
-
-- name: Set Netris auth token
-  ansible.builtin.set_fact:
-    _netris_token: "{{ _netris_auth.json.data.token }}"
+  ansible.builtin.include_role:
+    name: netris.controller.auth
+  vars:
+    netris_controller_url: "{{ _netris_ctl_url }}"
 
 - name: Get Netris site ID
   ansible.builtin.uri:
     url: "{{ _netris_ctl_url }}/api/sites"
     headers:
-      Cookie: "Web-Auth-Token={{ _netris_token }}"
+      Cookie: "connect.sid={{ netris_session_cookie }}"
     validate_certs: false
   register: _netris_sites
 
@@ -155,7 +146,7 @@
   ansible.builtin.uri:
     url: "{{ _netris_ctl_url }}/api/v2/vpc"
     headers:
-      Cookie: "Web-Auth-Token={{ _netris_token }}"
+      Cookie: "connect.sid={{ netris_session_cookie }}"
     validate_certs: false
   register: _netris_vpcs
 
@@ -167,7 +158,7 @@
   ansible.builtin.uri:
     url: "{{ _netris_ctl_url }}/api/v2/server-cluster-template"
     headers:
-      Cookie: "Web-Auth-Token={{ _netris_token }}"
+      Cookie: "connect.sid={{ netris_session_cookie }}"
     validate_certs: false
   register: _netris_sct
 
