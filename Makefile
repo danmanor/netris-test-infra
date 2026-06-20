@@ -1,4 +1,4 @@
-.PHONY: all setup deploy configure install-ocp install-osac discover-caas-hosts setup-caas destroy vendor-update
+.PHONY: all setup deploy connectivity configure install-ocp install-osac discover-caas-hosts setup-caas destroy vendor-update
 
 all: setup deploy configure install-ocp install-osac
 
@@ -7,6 +7,9 @@ setup:
 
 deploy:
 	ansible-playbook playbooks/deploy-lab.yml
+
+connectivity:
+	ansible-playbook playbooks/connectivity-lab.yml
 
 configure:
 	ansible-playbook playbooks/configure-ocp.yml
