@@ -36,10 +36,11 @@ Internet access for OCP image pulls flows through: hgx-00 → NS VNet → softga
 - **Bare-metal host** running RHEL 9.x or Rocky Linux 9.x with KVM support
 - **Resources**: ~32+ CPU cores, 128+ GB RAM (lab VMs + OCP SNO VM)
 - **Netris license key** — place at repo root as `license.key`
+- **OSAC/AAP license** — place at repo root as `license.zip`
 - **OpenShift pull secret** — place at `/root/pull-secret` (or set `pull_secret_path`)
 - **SSH key pair** at `/root/.ssh/id_rsa` and `/root/.ssh/id_rsa.pub`
 
-All system packages (ansible, libvirt, qemu-kvm, openvpn, Go, Pulumi, OpenTofu, etc.) and OCP/OSAC tools (aicli, oc, helm, osac CLI) are installed automatically by `make setup` and the Ansible roles. A pre-flight check validates the license, KVM support, pull secret, and minimum memory before deploying.
+All system packages (ansible, libvirt, qemu-kvm, openvpn, Go, Pulumi, OpenTofu, etc.) and OCP/OSAC tools (aicli, oc, helm, osac CLI) are installed automatically by `make setup` and the Ansible roles. A pre-flight check validates all secrets, KVM support, and minimum memory before deploying.
 
 ## Quick start
 
