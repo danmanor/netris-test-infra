@@ -4,9 +4,9 @@ argument_specs:
     options:
       vpc_state:
         type: str
-        choices: [present, absent]
+        choices: [present, absent, read]
         default: present
-        description: "Whether to create or delete the VPC."
+        description: "Whether to create, delete, or read VPCs."
 
   create:
     options:

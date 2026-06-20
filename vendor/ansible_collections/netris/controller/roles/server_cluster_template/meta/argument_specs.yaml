@@ -4,7 +4,7 @@ argument_specs:
     options:
       server_cluster_template_state:
         type: str
-        choices: [read]
+        choices: [read, list]
         default: read
         description: "Server cluster template operation to perform."
 
