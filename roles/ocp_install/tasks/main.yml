@@ -148,13 +148,13 @@
     cmd: virsh destroy {{ ocp_vm_name }}
   when:
     - _vm_state.stdout | trim == 'running'
-    - _cluster_status.stdout | trim != 'installed'
+    - _cluster_status.stdout | trim not in ['installed', 'installing', 'finalizing']
   changed_when: true
 
 - name: Recreate blank install disk
   ansible.builtin.command:
     cmd: qemu-img create -f qcow2 /var/lib/libvirt/images/hgx-00-ocp.qcow2 {{ ocp_install_disk_gb }}G
-  when: _cluster_status.stdout | trim not in ['installed', 'installing']
+  when: _cluster_status.stdout | trim not in ['installed', 'installing', 'finalizing']
   changed_when: true
 
 - name: Detach old cloud-init ISO if present
@@ -182,25 +182,35 @@
     cmd: virt-xml {{ ocp_vm_name }} --edit --boot hd,cdrom
   when:
     - _vm_state.stdout | trim != 'running'
-    - _cluster_status.stdout | trim != 'installed'
+    - _cluster_status.stdout | trim not in ['installed', 'installing', 'finalizing']
+  changed_when: true
+
+- name: Start VM if shut off during install
+  ansible.builtin.command:
+    cmd: virsh start {{ ocp_vm_name }}
+  when:
+    - _vm_state.stdout | trim != 'running'
+    - _cluster_status.stdout | trim in ['installing', 'finalizing']
   changed_when: true
 
 - name: Start VM with discovery ISO
   ansible.builtin.command:
     cmd: virsh start {{ ocp_vm_name }}
-  when: _vm_state.stdout | trim != 'running'
+  when:
+    - _vm_state.stdout | trim != 'running'
+    - _cluster_status.stdout | trim not in ['installed', 'installing', 'finalizing']
   changed_when: true
 
 - name: Wait for host discovery
   ansible.builtin.command:
     cmd: aicli -u {{ assisted_service_url }} wait cluster {{ ocp_cluster_name }} --status ready
-  when: _cluster_status.stdout | trim != 'installed'
+  when: _cluster_status.stdout | trim not in ['installed', 'installing', 'finalizing']
   changed_when: false
 
 - name: Start OCP installation
   ansible.builtin.command:
     cmd: aicli -u {{ assisted_service_url }} start cluster {{ ocp_cluster_name }}
-  when: _cluster_status.stdout | trim != 'installed'
+  when: _cluster_status.stdout | trim not in ['installed', 'installing', 'finalizing']
   changed_when: true
 
 - name: Wait for installation to complete
