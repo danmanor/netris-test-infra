@@ -57,15 +57,16 @@
 
 - name: Find NAT rule by name
   ansible.builtin.set_fact:
-    _existing_nat: "{{ (_nat_list_resp.json.data | default([])) | selectattr('name', 'equalto', nat_name) | list | first | default(none) }}"
-  when: _nat_list_resp.json is mapping
+    _existing_nat: >-
+      {{ ((_nat_list_resp.json.data | default(_nat_list_resp.json))
+          | selectattr('name', 'equalto', nat_name) | list | first | default(none)) }}
 
 - name: Set nat facts from existing rule (skip creation)
   ansible.builtin.set_fact:
     nat_id: "{{ _existing_nat.id }}"
     nat_already_existed: true
     nat_existing_rule: "{{ _existing_nat }}"
-  when: _existing_nat is defined and _existing_nat is not none
+  when: _existing_nat is mapping
 
 - name: Create NAT rule
   ansible.builtin.uri:
@@ -81,14 +82,14 @@
     timeout: "{{ netris_timeout | default(30) }}"
     validate_certs: "{{ netris_validate_certs | default(true) }}"
   register: _nat_create_resp
-  when: _existing_nat is not defined or _existing_nat is none
+  when: _existing_nat is not mapping
 
 - name: Set nat facts from create response
   ansible.builtin.set_fact:
     nat_id: "{{ _nat_create_resp.json.data.id | default(_nat_create_resp.json.data) }}"
     nat_already_existed: false
   when:
-    - _existing_nat is not defined or _existing_nat is none
+    - _existing_nat is not mapping
     - _nat_create_resp is not skipped
     - _nat_create_resp is changed or (_nat_create_resp.status | default(0)) in [200, 201]
     - _nat_create_resp.json is mapping
