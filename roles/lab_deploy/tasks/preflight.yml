@@ -1,0 +1,40 @@
+---
+- name: Check netris-lab directory exists
+  ansible.builtin.stat:
+    path: "{{ netris_lab_dir }}"
+  register: _lab_dir
+
+- name: Check license file exists
+  ansible.builtin.stat:
+    path: "{{ netris_license_file }}"
+  register: _license_file
+
+- name: Check KVM support
+  ansible.builtin.command: grep -c vmx /proc/cpuinfo
+  register: _kvm_check
+  changed_when: false
+  failed_when: false
+
+- name: Check minimum memory (16GB)
+  ansible.builtin.set_fact:
+    _mem_total_gb: "{{ ansible_memtotal_mb / 1024 | round(1) }}"
+
+- name: Collect preflight failures
+  ansible.builtin.set_fact:
+    _preflight_failures: >-
+      {{
+        []
+        + ([] if _lab_dir.stat.exists else ['netris-lab directory not found at ' + netris_lab_dir])
+        + ([] if _license_file.stat.exists else ['License file not found at ' + netris_license_file + ' — obtain one from Netris and place it there'])
+        + ([] if (_kvm_check.stdout | default('0') | int > 0) else ['KVM (vmx) not available — nested virtualization or bare metal required'])
+        + ([] if (_mem_total_gb | float >= 16.0) else ['Insufficient memory: ' + _mem_total_gb + 'GB available, 16GB minimum required'])
+      }}
+
+- name: Fail on preflight errors
+  ansible.builtin.fail:
+    msg: |-
+      Pre-flight checks failed:
+      {% for f in _preflight_failures %}
+        - {{ f }}
+      {% endfor %}
+  when: _preflight_failures | length > 0

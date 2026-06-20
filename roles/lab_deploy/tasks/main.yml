@@ -1,17 +1,10 @@
 ---
-- name: Check netris-lab directory exists
-  ansible.builtin.stat:
-    path: "{{ netris_lab_dir }}"
-  register: _lab_dir
-
-- name: Fail if netris-lab directory is missing
-  ansible.builtin.fail:
-    msg: "netris-lab directory not found at {{ netris_lab_dir }}"
-  when: not _lab_dir.stat.exists
-
 - name: Load netris-lab variables
   ansible.builtin.include_vars:
     file: "{{ netris_lab_dir }}/group_vars/all.yml"
+
+- name: Pre-flight checks
+  ansible.builtin.include_tasks: preflight.yml
 
 - name: Install Ansible collections
   ansible.builtin.command:
