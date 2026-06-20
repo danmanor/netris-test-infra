@@ -18,9 +18,11 @@
   ansible.builtin.file:
     path: /etc/dnsmasq.d/ocp-sno.conf
     state: absent
+  register: _dnsmasq_config_removed
 
 - name: Restart dnsmasq
   ansible.builtin.systemd:
     name: dnsmasq
     state: restarted
+  when: _dnsmasq_config_removed is changed
   failed_when: false
