@@ -10,8 +10,8 @@
     method: GET
     headers:
       Cookie: "connect.sid={{ netris_session_cookie }}"
-    validate_certs: "{{ netris_validate_certs }}"
-    timeout: "{{ netris_timeout }}"
+    validate_certs: "{{ netris_validate_certs | default(false) }}"
+    timeout: "{{ netris_timeout | default(30) }}"
     status_code: 200
   register: _vpc_resp
 
