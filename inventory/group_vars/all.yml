@@ -44,6 +44,13 @@ osac_kustomize_overlay: "vmaas-ci"
 osac_values_file: "values/vmaas-ci.yaml"
 osac_license_path: "{{ inventory_dir }}/../license.zip"
 
+# OSAC Component Images (leave empty to use osac-installer defaults)
+osac_operator_image: ""
+fulfillment_service_image: ""
+osac_aap_image: ""
+fulfillment_service_repo: "https://github.com/osac-project/fulfillment-service.git"
+fulfillment_service_branch: "main"
+
 # CaaS Discovery (boot remaining servers with discovery ISO)
 caas_discovery_vm_patterns:
   - "hgx-pod00-su0-h01"

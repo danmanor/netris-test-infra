@@ -93,7 +93,7 @@ ansible-playbook playbooks/site.yml -e ocp_version=4.18
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ocp_version` | `4.17` | OpenShift version to install |
+| `ocp_version` | `4.21` | OpenShift version to install |
 | `ocp_cluster_name` | `ocp-sno` | Cluster name |
 | `ocp_base_domain` | `osac.local` | Base DNS domain (resolved via local dnsmasq) |
 | `pull_secret_path` | `/root/pull-secret` | Path to OpenShift pull secret |
