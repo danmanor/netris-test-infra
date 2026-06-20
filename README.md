@@ -39,7 +39,7 @@ Internet access for OCP image pulls flows through: hgx-00 → NS VNet → softga
 - **OpenShift pull secret** — place at `/root/pull-secret` (or set `pull_secret_path`)
 - **SSH key pair** at `/root/.ssh/id_rsa` and `/root/.ssh/id_rsa.pub`
 
-All system packages (ansible, libvirt, qemu-kvm, openvpn, Go, Pulumi, OpenTofu, etc.) are installed automatically by `make prerequisites` and the Ansible roles. A pre-flight check validates the license, KVM support, and minimum memory before deploying.
+All system packages (ansible, libvirt, qemu-kvm, openvpn, Go, Pulumi, OpenTofu, etc.) and OCP/OSAC tools (aicli, oc, helm, osac CLI) are installed automatically by `make setup` and the Ansible roles. A pre-flight check validates the license, KVM support, pull secret, and minimum memory before deploying.
 
 ## Quick start
 
@@ -51,14 +51,18 @@ cd netris-test-infra
 cp /path/to/license.key ./license.key
 cp /path/to/pull-secret /root/pull-secret
 
-# Full VMaaS flow (deploy lab → configure networking → install OCP → install OSAC)
+# Full VMaaS flow (setup → deploy lab → configure networking → install OCP → install OSAC)
 make all
 
 # Or step by step
+make setup         # Install prerequisites + cache images + OCP/OSAC tools (~20 min)
 make deploy        # Deploy netris-lab (~45-90 min)
-make configure     # Resize VM + create VPC/VNet/Subnet (~10 min)
+make ocp-setup     # Resize VM + create VPC/VNet/Subnet (~10 min)
 make install-ocp   # Install OCP SNO via Assisted Installer (~30-60 min)
 make install-osac  # Install OSAC on OCP (~30 min)
+
+# Re-run connectivity (VPN, BGP, softgate agents) without full redeploy
+make connectivity
 
 # CaaS additional steps (after make all)
 make discover-caas-hosts  # Create InfraEnv, boot hgx1-3 with discovery ISO (~15 min)
@@ -97,6 +101,8 @@ ansible-playbook playbooks/site.yml -e ocp_version=4.21
 | `ocp_base_domain` | `osac.local` | Base DNS domain (resolved via local dnsmasq) |
 | `pull_secret_path` | `/root/pull-secret` | Path to OpenShift pull secret |
 | `ssh_public_key_path` | `/root/.ssh/id_rsa.pub` | SSH public key for node access |
+| `assisted_service_url` | `http://localhost:8090` | Assisted Installer service URL |
+| `assisted_service_ip` | `198.51.100.9` | IP address for Assisted Service access |
 
 ### Netris Networking
 
@@ -107,15 +113,18 @@ ansible-playbook playbooks/site.yml -e ocp_version=4.21
 | `ocp_subnet_cidr` | `192.168.40.0/24` | Subnet CIDR for OCP server |
 | `ocp_gateway` | `192.168.40.1/24` | VNet gateway |
 | `ocp_node_ip` | `192.168.40.2` | Expected OCP node IP (used for DNS) |
+| `ocp_snat_ip` | `198.51.100.1` | SNAT IP for outbound internet access |
+| `ocp_dnat_ip` | `198.51.100.2` | DNAT IP for inbound access to OCP API/apps |
 | `ew_fabric_enable` | `0` | East-West fabric (0=disabled) |
 
 ### Netris Controller
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `netris_controller_url` | `http://localhost:9443` | Controller API URL |
 | `netris_username` | `netris` | API username |
 | `netris_password` | `netris` | API password |
+
+The controller URL is discovered dynamically by the `netris_configure` role from the running K3s service.
 
 ### CaaS Discovery
 
@@ -140,7 +149,9 @@ ansible-playbook playbooks/site.yml -e ocp_version=4.21
 
 | Playbook | Roles | Purpose |
 |----------|-------|---------|
-| `deploy-lab.yml` | `lab_deploy` | Deploy netris-lab (prerequisites → cache → deploy → verify) |
+| `setup-lab.yml` | `lab_setup` | Install prerequisites, cache images, install OCP/OSAC tools |
+| `deploy-lab.yml` | `lab_deploy` | Deploy netris-lab (K3s → topology → cloudsim → connectivity → verify) |
+| `connectivity-lab.yml` | (inline) `connectivity` | Re-run lab connectivity (VPN, BGP, softgate agents) |
 | `configure-ocp.yml` | `vm_resize`, `netris_configure` | Resize hgx-00 VM + create VPC/VNet/Subnet |
 | `install-ocp.yml` | `assisted_service`, `ocp_install` | Start Assisted Service, install OCP SNO |
 | `install-osac.yml` | `osac_install` | Install OSAC on OCP SNO |
@@ -149,18 +160,25 @@ ansible-playbook playbooks/site.yml -e ocp_version=4.21
 | `destroy.yml` | `destroy` | Tear down lab + Assisted Service + DNS |
 | `site.yml` | all common roles | Full end-to-end flow (VMaaS) |
 
-### How `deploy-lab.yml` works
+### How setup and deploy work
 
-The `lab_deploy` role uses `include_role` to run the netris-lab submodule roles directly in the parent Ansible process, rather than shelling out to `ansible-playbook` or `make`. The execution order is:
+Setup and deploy are split into two phases. The `lab_setup` role (run by `setup-lab.yml`) handles installation and caching. The `lab_deploy` role (run by `deploy-lab.yml`) handles infrastructure deployment. Both roles use `include_role` to run netris-lab submodule roles directly in the parent Ansible process.
 
-1. **Pre-flight checks** — validates license file, KVM support, and minimum memory
+**`setup-lab.yml` (lab_setup role):**
+
+1. **Pre-flight checks** — validates license file, KVM support, pull secret, and minimum memory
 2. **prerequisites** — installs system packages, Go, Pulumi, OpenTofu, configures libvirt/bridges
 3. **cache** — pre-downloads container and cloud images via skopeo
-4. **k3s_controller** — deploys K3s and Netris controller Helm chart
-5. **topology** — creates network topology in Netris API via OpenTofu
-6. **cloudsim** — provisions KVM VMs via Pulumi
-7. **connectivity** — sets up VPN, socat forwarding, ISP BGP, softgate agents
-8. **verify** — health checks (switches, softgates, E-BGP, license, API)
+4. **OCP/OSAC tools** — installs podman, dnsmasq, aicli, oc, helm, Go, and builds the osac CLI from fulfillment-service
+
+**`deploy-lab.yml` (lab_deploy role):**
+
+1. **Pre-flight checks** — re-validates environment
+2. **k3s_controller** — deploys K3s and Netris controller Helm chart
+3. **topology** — creates network topology in Netris API via OpenTofu
+4. **cloudsim** — provisions KVM VMs via Pulumi
+5. **connectivity** — sets up VPN, socat forwarding, ISP BGP, softgate agents
+6. **verify** — health checks (switches, softgates, E-BGP, license, API)
 
 ## CI Integration
 
