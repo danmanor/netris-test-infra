@@ -1,4 +1,16 @@
 ---
+- name: Install aicli and podman
+  ansible.builtin.dnf:
+    name:
+      - podman
+      - python3-pip
+    state: present
+
+- name: Install aicli
+  ansible.builtin.pip:
+    name: aicli
+    state: present
+
 - name: Check if Assisted Service is already running with correct IP
   ansible.builtin.shell:
     cmd: podman exec assisted-installer-service env 2>/dev/null | grep -q "SERVICE_BASE_URL=http://{{ assisted_service_ip }}:8090"
