@@ -8,7 +8,7 @@
 
 - name: Install Ansible collections
   ansible.builtin.command:
-    cmd: ansible-galaxy collection install -r requirements.yml -p collections --force
+    cmd: ansible-galaxy collection install -r requirements.yml -p collections
     chdir: "{{ netris_lab_dir }}"
   changed_when: false
 

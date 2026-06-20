@@ -10,7 +10,8 @@
   ansible.builtin.command:
     cmd: git submodule update --init --recursive --remote
     chdir: "{{ osac_installer_dir }}"
-  changed_when: true
+  register: _submodule_update
+  changed_when: _submodule_update.stdout | length > 0
 
 - name: Override component images in values file
   when: osac_operator_image or fulfillment_service_image or osac_aap_image
@@ -90,10 +91,10 @@
   ansible.builtin.command:
     cmd: /usr/local/go/bin/go build -o /usr/local/bin/osac ./cmd/osac
     chdir: /opt/fulfillment-service
+    creates: /usr/local/bin/osac
   environment:
     GOPATH: /root/go
     GOCACHE: /root/.cache/go-build
-  changed_when: true
 
 - name: Get cluster apps domain
   ansible.builtin.shell:
@@ -106,8 +107,8 @@
 - name: Set fulfillment hostnames in values file
   ansible.builtin.replace:
     path: "{{ osac_installer_dir }}/{{ osac_values_file }}"
-    regexp: "{{ item.key }}:.*"
-    replace: "{{ item.key }}: fulfillment-{{ item.suffix }}-{{ osac_namespace }}.{{ _apps_domain.stdout }}"
+    regexp: "^(\\s*){{ item.key }}:.*"
+    replace: "\\1{{ item.key }}: fulfillment-{{ item.suffix }}-{{ osac_namespace }}.{{ _apps_domain.stdout }}"
   loop:
     - { key: "externalHostname", suffix: "api" }
     - { key: "internalHostname", suffix: "internal-api" }
@@ -172,6 +173,15 @@
     - server-ssh-key
     - server-ssh-bastion-key
 
+- name: Check if OSAC is already deployed
+  ansible.builtin.shell:
+    cmd: oc get deployment -n {{ osac_namespace }} --no-headers 2>/dev/null | wc -l
+  environment:
+    KUBECONFIG: /root/.kube/config
+  register: _osac_deployed
+  changed_when: false
+  failed_when: false
+
 - name: Run OSAC setup.sh
   ansible.builtin.command:
     cmd: ./scripts/setup.sh
@@ -208,6 +218,7 @@
     SERVER_SSH_USER: root
     SERVER_MGMT_ROUTE_DESTINATION: "192.168.16.0/20"
     SERVER_MGMT_ROUTE_GATEWAY: "192.168.16.1"
+  when: _osac_deployed.stdout | default('0') | int == 0
   changed_when: true
   timeout: 3600
 

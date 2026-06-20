@@ -7,11 +7,13 @@
   until: _agent_count.stdout | int >= caas_agents | length
   retries: 120
   delay: 15
+  changed_when: false
 
 - name: Get agent names
   ansible.builtin.shell:
     cmd: oc get agent -n {{ caas_agent_namespace }} -o jsonpath='{.items[*].metadata.name}'
   register: _agent_names
+  changed_when: false
 
 - name: Set agent name list
   ansible.builtin.set_fact:
@@ -25,7 +27,8 @@
       osac.openshift.io/resource_class={{ caas_host_type_id }}
       --overwrite
   loop: "{{ caas_agent_names }}"
-  changed_when: true
+  register: _label_rc
+  changed_when: "'labeled' in _label_rc.stdout and 'not labeled' not in _label_rc.stdout"
 
 - name: Label agent with netris server name
   ansible.builtin.command:
@@ -36,14 +39,25 @@
   loop: "{{ caas_agents }}"
   loop_control:
     index_var: idx
-  changed_when: true
+  register: _label_ns
+  changed_when: "'labeled' in _label_ns.stdout and 'not labeled' not in _label_ns.stdout"
+
+- name: Check agent approval status
+  ansible.builtin.shell:
+    cmd: oc get agent/{{ item }} -n {{ caas_agent_namespace }} -o jsonpath='{.spec.approved}'
+  register: _agent_approved
+  changed_when: false
+  loop: "{{ caas_agent_names }}"
 
 - name: Approve agents
   ansible.builtin.command:
     cmd: >-
-      oc patch agent/{{ item }} -n {{ caas_agent_namespace }}
+      oc patch agent/{{ item.item }} -n {{ caas_agent_namespace }}
       --type=merge -p '{"spec":{"approved":true}}'
-  loop: "{{ caas_agent_names }}"
+  when: item.stdout != 'true'
+  loop: "{{ _agent_approved.results }}"
+  loop_control:
+    label: "{{ item.item }}"
   changed_when: true
 
 # Step 3: Register host type in fulfillment service
@@ -51,6 +65,7 @@
   ansible.builtin.shell:
     cmd: oc get route fulfillment-internal-api -n {{ osac_namespace }} -o jsonpath='{.status.ingress[0].host}'
   register: _fulfillment_host
+  changed_when: false
 
 - name: Set fulfillment API URL
   ansible.builtin.set_fact:
@@ -60,6 +75,7 @@
   ansible.builtin.shell:
     cmd: oc create token -n {{ osac_namespace }} admin
   register: _sa_token
+  changed_when: false
 
 - name: Create host type
   ansible.builtin.uri:
@@ -88,19 +104,34 @@
     dest: /root/.config/osac/config.json
     mode: "0600"
 
+- name: Check if cluster already exists
+  ansible.builtin.shell:
+    cmd: osac get clusters -o json | python3 -c "import sys,json; clusters=json.load(sys.stdin); print('exists' if any(c.get('name')=='{{ caas_cluster_name }}' for c in clusters) else 'absent')"
+  register: _cluster_exists
+  changed_when: false
+  failed_when: false
+
 - name: Create cluster
   ansible.builtin.command:
     cmd: osac create cluster --catalog-item {{ caas_cluster_catalog_item }} --name {{ caas_cluster_name }}
   register: _cluster_create
+  when: _cluster_exists.stdout | default('') != 'exists'
   changed_when: true
+
+- name: Get existing cluster ID
+  ansible.builtin.shell:
+    cmd: osac get clusters -o json | python3 -c "import sys,json; clusters=json.load(sys.stdin); print(next(c['id'] for c in clusters if c.get('name')=='{{ caas_cluster_name }}'))"
+  register: _existing_cluster_id
+  when: _cluster_exists.stdout | default('') == 'exists'
+  changed_when: false
 
 - name: Extract cluster ID
   ansible.builtin.set_fact:
-    caas_cluster_id: "{{ _cluster_create.stdout | regex_search('[0-9a-f-]{36}') }}"
+    caas_cluster_id: "{{ _cluster_create.stdout | regex_search('[0-9a-f-]{36}') if _cluster_create is not skipped else _existing_cluster_id.stdout }}"
 
 - name: Report cluster creation started
   ansible.builtin.debug:
-    msg: "Cluster '{{ caas_cluster_name }}' created with ID {{ caas_cluster_id }}"
+    msg: "Cluster '{{ caas_cluster_name }}' {{ 'created' if _cluster_create is not skipped else 'already exists' }} with ID {{ caas_cluster_id }}"
 
 # Step 5: Wait for cluster to become ready
 - name: Wait for cluster to be ready
@@ -111,6 +142,7 @@
   retries: 120
   delay: 30
   failed_when: _cluster_state.stdout == "CLUSTER_STATE_FAILED"
+  changed_when: false
 
 - name: Report cluster ready
   ansible.builtin.debug:
