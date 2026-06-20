@@ -1,16 +1,4 @@
 ---
-- name: Install aicli and podman
-  ansible.builtin.dnf:
-    name:
-      - podman
-      - python3-pip
-    state: present
-
-- name: Install aicli
-  ansible.builtin.pip:
-    name: aicli
-    state: present
-
 - name: Check if Assisted Service is already running with correct IP
   ansible.builtin.shell:
     cmd: podman exec assisted-installer-service env 2>/dev/null | grep -q "SERVICE_BASE_URL=http://{{ assisted_service_ip }}:8090"
@@ -88,11 +76,6 @@
   until: _ai_ready is not failed
   retries: 30
   delay: 10
-
-- name: Install dnsmasq
-  ansible.builtin.dnf:
-    name: dnsmasq
-    state: present
 
 - name: Configure DNS for OCP SNO
   ansible.builtin.copy:

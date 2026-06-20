@@ -61,41 +61,6 @@
     remote_src: true
     mode: "0644"
 
-- name: Install oc CLI
-  ansible.builtin.shell:
-    cmd: |
-      curl -fsSL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/openshift-client-linux.tar.gz \
-        | tar xzf - -C /usr/local/bin oc kubectl
-    creates: /usr/local/bin/oc
-
-- name: Install helm
-  ansible.builtin.command:
-    cmd: bash -c "curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash"
-    creates: /usr/local/bin/helm
-
-- name: Install Go toolchain
-  ansible.builtin.shell:
-    cmd: |
-      curl -fsSL https://go.dev/dl/go1.24.4.linux-amd64.tar.gz \
-        | tar xzf - -C /usr/local
-    creates: /usr/local/go/bin/go
-
-- name: Clone fulfillment-service
-  ansible.builtin.git:
-    repo: "{{ fulfillment_service_repo }}"
-    dest: /opt/fulfillment-service
-    version: "{{ fulfillment_service_branch }}"
-    force: true
-
-- name: Build osac CLI
-  ansible.builtin.command:
-    cmd: /usr/local/go/bin/go build -o /usr/local/bin/osac ./cmd/osac
-    chdir: /opt/fulfillment-service
-    creates: /usr/local/bin/osac
-  environment:
-    GOPATH: /root/go
-    GOCACHE: /root/.cache/go-build
-
 - name: Get cluster apps domain
   ansible.builtin.shell:
     cmd: oc get ingresses.config/cluster -o jsonpath='{.spec.domain}'
