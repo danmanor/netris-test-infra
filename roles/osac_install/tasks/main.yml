@@ -124,49 +124,38 @@
   ansible.builtin.set_fact:
     _netris_ctl_url: "http://192.168.16.254:{{ _traefik_nodeport.stdout }}"
 
-- name: Authenticate to Netris controller
+- name: Get Netris site
   ansible.builtin.include_role:
-    name: netris.controller.auth
+    name: netris.controller.site
   vars:
     netris_controller_url: "{{ _netris_ctl_url }}"
+    site_state: read
 
-- name: Get Netris site ID
-  ansible.builtin.uri:
-    url: "{{ _netris_ctl_url }}/api/sites"
-    headers:
-      Cookie: "connect.sid={{ netris_session_cookie }}"
-    validate_certs: false
-  register: _netris_sites
-
-- name: Set Netris site ID
+- name: Set site ID
   ansible.builtin.set_fact:
-    _netris_site_id: "{{ _netris_sites.json.data[0].id }}"
+    _netris_site_id: "{{ netris_site_id }}"
 
-- name: Get OCP VPC ID
-  ansible.builtin.uri:
-    url: "{{ _netris_ctl_url }}/api/v2/vpc"
-    headers:
-      Cookie: "connect.sid={{ netris_session_cookie }}"
-    validate_certs: false
-  register: _netris_vpcs
+- name: Get VPCs
+  ansible.builtin.include_role:
+    name: netris.controller.vpc
+  vars:
+    netris_controller_url: "{{ _netris_ctl_url }}"
+    vpc_state: read
 
 - name: Set OCP VPC ID
   ansible.builtin.set_fact:
-    _netris_mgmt_vpc_id: "{{ (_netris_vpcs.json | selectattr('name', 'equalto', ocp_vpc_name) | first).id }}"
+    _netris_mgmt_vpc_id: "{{ netris_vpc_by_name[ocp_vpc_name].id }}"
 
-- name: Get server cluster template ID
-  ansible.builtin.uri:
-    url: "{{ _netris_ctl_url }}/api/v2/server-cluster-template"
-    headers:
-      Cookie: "connect.sid={{ netris_session_cookie }}"
-    validate_certs: false
-  register: _netris_sct
+- name: Get server cluster templates
+  ansible.builtin.include_role:
+    name: netris.controller.server_cluster_template
+  vars:
+    netris_controller_url: "{{ _netris_ctl_url }}"
+    server_cluster_template_state: list
 
 - name: Set server cluster template ID
   ansible.builtin.set_fact:
-    _netris_sct_id: >-
-      {{ ((_netris_sct.json.data | default(_netris_sct.json))
-          | selectattr('name', 'equalto', 'server-cluster-template') | first).id }}
+    _netris_sct_id: "{{ netris_sct_by_name['server-cluster-template'].id }}"
 
 - name: Build resource class map
   ansible.builtin.set_fact:
