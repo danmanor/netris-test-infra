@@ -15,7 +15,7 @@ This repo takes the first server (hgx-00), resizes it for OCP, configures Netris
 
 ```
 Bare-metal host
-└── netris-lab (~50 VMs)
+└── netris-lab (~15 VMs)
     ├── Netris controller (K3s)
     ├── Switches (leaf/spine fabric)
     ├── Softgates (NAT → internet)
@@ -33,14 +33,13 @@ Internet access for OCP image pulls flows through: hgx-00 → NS VNet → softga
 
 ## Prerequisites
 
-- **RHEL bare-metal host** with KVM/libvirt support
+- **Bare-metal host** running RHEL 9.x or Rocky Linux 9.x with KVM support
 - **Resources**: ~32+ CPU cores, 128+ GB RAM (lab VMs + OCP SNO VM)
-- **Tools installed**: `ansible`, `aicli`, `virsh`, `virt-xml`, `git`
-- **Netris license key** — place in `netris-lab/license.key`
+- **Netris license key** — place at repo root as `license.key`
 - **OpenShift pull secret** — place at `/root/pull-secret` (or set `pull_secret_path`)
 - **SSH key pair** at `/root/.ssh/id_rsa` and `/root/.ssh/id_rsa.pub`
 
-The `netris.controller` Ansible collection is installed automatically by `make setup` (via `requirements.yml`). The netris-lab prerequisites (Go, Pulumi, OpenTofu, etc.) are installed automatically by `make deploy`.
+All system packages (ansible, libvirt, qemu-kvm, openvpn, Go, Pulumi, OpenTofu, etc.) are installed automatically by `make prerequisites` and the Ansible roles. A pre-flight check validates the license, KVM support, and minimum memory before deploying.
 
 ## Quick start
 
@@ -49,7 +48,7 @@ git clone --recurse-submodules https://github.com/danmanor/netris-test-infra.git
 cd netris-test-infra
 
 # Place prerequisites
-cp /path/to/license.key netris-lab/license.key
+cp /path/to/license.key ./license.key
 cp /path/to/pull-secret /root/pull-secret
 
 # Full VMaaS flow (deploy lab → configure networking → install OCP → install OSAC)
@@ -73,10 +72,10 @@ After `make install-ocp`, the kubeconfig is at `/root/.kube/config`.
 
 ## Configuration
 
-All parameters are in [`group_vars/all.yml`](group_vars/all.yml). Override with `-e`:
+All parameters are in [`inventory/group_vars/all.yml`](inventory/group_vars/all.yml). Override with `-e`:
 
 ```bash
-ansible-playbook playbooks/site.yml -e ocp_version=4.18
+ansible-playbook playbooks/site.yml -e ocp_version=4.21
 ```
 
 ### OCP Server VM
@@ -116,7 +115,7 @@ ansible-playbook playbooks/site.yml -e ocp_version=4.18
 |----------|---------|-------------|
 | `netris_controller_url` | `http://localhost:9443` | Controller API URL |
 | `netris_username` | `netris` | API username |
-| `netris_password` | `MaqfC1JBM7zasPE2doVT` | API password (lab default) |
+| `netris_password` | `netris` | API password |
 
 ### CaaS Discovery
 
@@ -141,14 +140,27 @@ ansible-playbook playbooks/site.yml -e ocp_version=4.18
 
 | Playbook | Roles | Purpose |
 |----------|-------|---------|
-| `deploy-lab.yml` | `lab_deploy` | Deploy netris-lab (make setup + deploy + verify) |
+| `deploy-lab.yml` | `lab_deploy` | Deploy netris-lab (prerequisites → cache → deploy → verify) |
 | `configure-ocp.yml` | `vm_resize`, `netris_configure` | Resize hgx-00 VM + create VPC/VNet/Subnet |
 | `install-ocp.yml` | `assisted_service`, `ocp_install` | Start Assisted Service, install OCP SNO |
 | `install-osac.yml` | `osac_install` | Install OSAC on OCP SNO |
-| `discover-caas-hosts.yml` | `caas_discovery` | Create InfraEnv, boot hgx1-3 with discovery ISO (CaaS only) |
-| `setup-caas.yml` | `caas_setup` | Annotate agents, create host type + cluster (CaaS only) |
+| `discover-caas-hosts.yml` | `caas_discovery` | Create InfraEnv, boot hgx1-3 with discovery ISO |
+| `setup-caas.yml` | `caas_setup` | Annotate agents, create host type + cluster |
 | `destroy.yml` | `destroy` | Tear down lab + Assisted Service + DNS |
 | `site.yml` | all common roles | Full end-to-end flow (VMaaS) |
+
+### How `deploy-lab.yml` works
+
+The `lab_deploy` role uses `include_role` to run the netris-lab submodule roles directly in the parent Ansible process, rather than shelling out to `ansible-playbook` or `make`. The execution order is:
+
+1. **Pre-flight checks** — validates license file, KVM support, and minimum memory
+2. **prerequisites** — installs system packages, Go, Pulumi, OpenTofu, configures libvirt/bridges
+3. **cache** — pre-downloads container and cloud images via skopeo
+4. **k3s_controller** — deploys K3s and Netris controller Helm chart
+5. **topology** — creates network topology in Netris API via OpenTofu
+6. **cloudsim** — provisions KVM VMs via Pulumi
+7. **connectivity** — sets up VPN, socat forwarding, ISP BGP, softgate agents
+8. **verify** — health checks (switches, softgates, E-BGP, license, API)
 
 ## CI Integration
 
@@ -158,9 +170,3 @@ Used by CI workflows in the [openshift/release](https://github.com/openshift/rel
 - **`osac-project-netris-caas`** — CaaS e2e: same base + discover agents → setup CaaS cluster → CaaS tests
 
 CI steps SSH to an OFCIR bare-metal host, clone this repo with `--recurse-submodules`, and run `make` targets.
-
-## Known Limitations
-
-- **VNet port format**: The `ocp_server_ports` variable uses `eth9@hgx-pod00-su0-h00` notation from Terraform. The exact format accepted by the Netris API may differ and needs verification.
-- **OCP node IP**: `ocp_node_ip` (192.168.40.2) is a placeholder. The actual IP depends on Netris IPAM assignment and may need to be discovered dynamically.
-- **Assisted Service reachability**: The discovery agent on hgx-00 needs to reach the Assisted Service on the host. If the default `aicli create onprem` IP detection doesn't work, set `SERVICE_BASE_URL` to the br-mgmt host IP (192.168.16.254).
