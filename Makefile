@@ -1,4 +1,4 @@
-.PHONY: all setup deploy connectivity ocp-setup install-ocp install-osac discover-caas-hosts setup-caas destroy vendor-update
+.PHONY: all setup deploy connectivity ocp-setup install-ocp install-osac discover-caas-hosts setup-caas destroy vendor-update lint
 
 all: setup deploy ocp-setup install-ocp install-osac
 
@@ -33,3 +33,6 @@ vendor-update:
 	rm -rf vendor/ansible_collections
 	ansible-galaxy collection install -r requirements.yml -p vendor --force
 	ansible-galaxy collection install ansible.utils -p vendor --force
+
+lint:
+	ansible-lint

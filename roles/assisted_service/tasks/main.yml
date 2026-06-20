@@ -84,7 +84,7 @@
       address=/.apps.{{ ocp_cluster_name }}.{{ ocp_base_domain }}/{{ ocp_dnat_ip }}
     dest: /etc/dnsmasq.d/ocp-sno.conf
     mode: "0644"
-  notify: restart dnsmasq
+  notify: Restart dnsmasq
 
 - name: Enable and start dnsmasq
   ansible.builtin.systemd:
