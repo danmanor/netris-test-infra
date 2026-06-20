@@ -1,6 +1,6 @@
-.PHONY: all prerequisites deploy configure install-ocp install-osac discover-caas-hosts setup-caas destroy vendor-update
+.PHONY: all prerequisites deploy ocp-setup install-ocp install-osac discover-caas-hosts setup-caas destroy vendor-update
 
-all: prerequisites deploy configure install-ocp install-osac
+all: prerequisites deploy ocp-setup install-ocp install-osac
 
 prerequisites:
 	dnf install -y ansible-core python3-pip libvirt virt-install qemu-kvm git dnsmasq podman
@@ -9,7 +9,7 @@ prerequisites:
 deploy: prerequisites
 	ansible-playbook playbooks/deploy-lab.yml
 
-configure:
+ocp-setup:
 	ansible-playbook playbooks/configure-ocp.yml
 
 install-ocp:
