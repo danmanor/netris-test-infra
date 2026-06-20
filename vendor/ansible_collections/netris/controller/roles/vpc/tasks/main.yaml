@@ -1,4 +1,8 @@
 ---
+- name: Read VPCs
+  when: vpc_state == 'read'
+  ansible.builtin.include_tasks: read.yaml
+
 - name: Create VPC
   when: vpc_state == 'present'
   ansible.builtin.include_tasks: create.yaml

@@ -77,11 +77,6 @@
   retries: 30
   delay: 10
 
-- name: Install dnsmasq
-  ansible.builtin.dnf:
-    name: dnsmasq
-    state: present
-
 - name: Configure DNS for OCP SNO
   ansible.builtin.copy:
     content: |

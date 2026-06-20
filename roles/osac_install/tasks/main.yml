@@ -10,7 +10,36 @@
   ansible.builtin.command:
     cmd: git submodule update --init --recursive --remote
     chdir: "{{ osac_installer_dir }}"
-  changed_when: true
+  register: _submodule_update
+  changed_when: _submodule_update.stdout | length > 0
+
+- name: Override component images in values file
+  when: osac_operator_image or fulfillment_service_image or osac_aap_image
+  block:
+    - name: Read current values file
+      ansible.builtin.slurp:
+        src: "{{ osac_installer_dir }}/{{ osac_values_file }}"
+      register: _values_raw
+
+    - name: Build image overrides
+      ansible.builtin.set_fact:
+        _image_overrides: >-
+          {{ {}
+             | combine(({'operator': {'image': {
+                 'repository': osac_operator_image | regex_replace(':([^/]+)$', ''),
+                 'tag': (osac_operator_image | regex_search(':([^/]+)$', '\1') | first | default('latest'))
+               }}} if osac_operator_image else {}), recursive=true)
+             | combine(({'service': {'images': {'service': fulfillment_service_image}},
+                         'dbMigrate': {'image': fulfillment_service_image}}
+                        if fulfillment_service_image else {}), recursive=true)
+             | combine(({'aap': {'bootstrap': {'image': osac_aap_image}}}
+                        if osac_aap_image else {}), recursive=true)
+          }}
+
+    - name: Write patched values file
+      ansible.builtin.copy:
+        dest: "{{ osac_installer_dir }}/{{ osac_values_file }}"
+        content: "{{ _values_raw.content | b64decode | from_yaml | combine(_image_overrides, recursive=true) | to_nice_yaml(indent=2) }}"
 
 - name: Ensure overlay files directory exists
   ansible.builtin.file:
@@ -32,26 +61,6 @@
     remote_src: true
     mode: "0644"
 
-- name: Install oc CLI
-  ansible.builtin.shell:
-    cmd: |
-      curl -fsSL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/openshift-client-linux.tar.gz \
-        | tar xzf - -C /usr/local/bin oc kubectl
-    creates: /usr/local/bin/oc
-
-- name: Install helm
-  ansible.builtin.command:
-    cmd: bash -c "curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash"
-    creates: /usr/local/bin/helm
-
-- name: Install osac CLI
-  ansible.builtin.shell:
-    cmd: |
-      curl -L -o /usr/local/bin/osac \
-        https://github.com/osac-project/fulfillment-service/releases/latest/download/osac_Linux_x86_64
-      chmod +x /usr/local/bin/osac
-    creates: /usr/local/bin/osac
-
 - name: Get cluster apps domain
   ansible.builtin.shell:
     cmd: oc get ingresses.config/cluster -o jsonpath='{.spec.domain}'
@@ -63,11 +72,80 @@
 - name: Set fulfillment hostnames in values file
   ansible.builtin.replace:
     path: "{{ osac_installer_dir }}/{{ osac_values_file }}"
-    regexp: "{{ item.key }}:.*"
-    replace: "{{ item.key }}: fulfillment-{{ item.suffix }}-{{ osac_namespace }}.{{ _apps_domain.stdout }}"
+    regexp: "^(\\s*){{ item.key }}:.*"
+    replace: "\\1{{ item.key }}: fulfillment-{{ item.suffix }}-{{ osac_namespace }}.{{ _apps_domain.stdout }}"
   loop:
     - { key: "externalHostname", suffix: "api" }
     - { key: "internalHostname", suffix: "internal-api" }
+
+- name: Discover Netris controller URL
+  ansible.builtin.shell:
+    cmd: kubectl get svc traefik -n kube-system -o jsonpath='{.spec.ports[?(@.name=="web")].nodePort}'
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: _traefik_nodeport
+  changed_when: false
+
+- name: Set Netris controller URL
+  ansible.builtin.set_fact:
+    _netris_ctl_url: "http://192.168.16.254:{{ _traefik_nodeport.stdout }}"
+
+- name: Get Netris site
+  ansible.builtin.include_role:
+    name: netris.controller.site
+  vars:
+    netris_controller_url: "{{ _netris_ctl_url }}"
+    site_state: read
+
+- name: Set site ID
+  ansible.builtin.set_fact:
+    _netris_site_id: "{{ netris_site_id }}"
+
+- name: Get VPCs
+  ansible.builtin.include_role:
+    name: netris.controller.vpc
+  vars:
+    netris_controller_url: "{{ _netris_ctl_url }}"
+    vpc_state: read
+
+- name: Set OCP VPC ID
+  ansible.builtin.set_fact:
+    _netris_mgmt_vpc_id: "{{ netris_vpc_by_name[ocp_vpc_name].id }}"
+
+- name: Get server cluster templates
+  ansible.builtin.include_role:
+    name: netris.controller.server_cluster_template
+  vars:
+    netris_controller_url: "{{ _netris_ctl_url }}"
+    server_cluster_template_state: list
+
+- name: Set server cluster template ID
+  ansible.builtin.set_fact:
+    _netris_sct_id: "{{ netris_sct_by_name['server-cluster-template'].id }}"
+
+- name: Build resource class map
+  ansible.builtin.set_fact:
+    _netris_resource_class_map: >-
+      {"{{ caas_host_type_id }}":{"server_cluster_template_id":{{ _netris_sct_id }},"mgmt_interface":"ens4","vpc_interfaces":["ens5"]}}
+
+- name: Copy SSH keys for Netris integration
+  ansible.builtin.copy:
+    src: "{{ ssh_public_key_path | regex_replace('\\.pub$', '') }}"
+    dest: "{{ osac_installer_dir }}/overlays/{{ osac_kustomize_overlay }}/files/{{ item }}"
+    remote_src: true
+    mode: "0600"
+  loop:
+    - server-ssh-key
+    - server-ssh-bastion-key
+
+- name: Check if OSAC is already deployed
+  ansible.builtin.shell:
+    cmd: oc get deployment -n {{ osac_namespace }} --no-headers 2>/dev/null | wc -l
+  environment:
+    KUBECONFIG: /root/.kube/config
+  register: _osac_deployed
+  changed_when: false
+  failed_when: false
 
 - name: Run OSAC setup.sh
   ansible.builtin.command:
@@ -82,6 +160,30 @@
     VIRT_SERVICE: "true"
     STORAGE_SERVICE: "true"
     INGRESS_SERVICE: "true"
+    AAP_EE_IMAGE: "{{ osac_aap_image if osac_aap_image else omit }}"
+    NETWORK_CLASS: netris
+    NETWORK_STEPS_COLLECTION: netris.steps
+    EXTERNAL_ACCESS_BASE_DOMAIN: "{{ ocp_base_domain }}"
+    EXTERNAL_ACCESS_SUPPORTED_BASE_DOMAINS: "{{ ocp_base_domain }}"
+    EXTERNAL_ACCESS_API_INTERNAL_NETWORK: hypershift
+    HOSTED_CLUSTER_BASE_DOMAIN: "{{ ocp_base_domain }}"
+    HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY: SingleReplica
+    HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY: SingleReplica
+    NETRIS_CONTROLLER_URL: "{{ _netris_ctl_url }}"
+    NETRIS_USERNAME: "{{ netris_username }}"
+    NETRIS_PASSWORD: "{{ netris_password }}"
+    NETRIS_SITE_ID: "{{ _netris_site_id }}"
+    NETRIS_TENANT_ID: "1"
+    NETRIS_TENANT_NAME: Admin
+    NETRIS_MGMT_VPC_ID: "{{ _netris_mgmt_vpc_id }}"
+    NETRIS_MGMT_VPC_NAME: "{{ ocp_vpc_name }}"
+    NETRIS_RESOURCE_CLASS_MAP: "{{ _netris_resource_class_map }}"
+    SERVER_SSH_BASTION_HOST: "192.168.16.254"
+    SERVER_SSH_BASTION_USER: root
+    SERVER_SSH_USER: root
+    SERVER_MGMT_ROUTE_DESTINATION: "192.168.16.0/20"
+    SERVER_MGMT_ROUTE_GATEWAY: "192.168.16.1"
+  when: _osac_deployed.stdout | default('0') | int == 0
   changed_when: true
   timeout: 3600
 

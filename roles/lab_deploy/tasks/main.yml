@@ -1,31 +1,10 @@
 ---
-- name: Check netris-lab directory exists
-  ansible.builtin.stat:
-    path: "{{ netris_lab_dir }}"
-  register: _lab_dir
-
-- name: Fail if netris-lab directory is missing
-  ansible.builtin.fail:
-    msg: "netris-lab directory not found at {{ netris_lab_dir }}"
-  when: not _lab_dir.stat.exists
-
 - name: Load netris-lab variables
   ansible.builtin.include_vars:
     file: "{{ netris_lab_dir }}/group_vars/all.yml"
 
-- name: Install Ansible collections
-  ansible.builtin.command:
-    cmd: ansible-galaxy collection install -r requirements.yml -p collections --force
-    chdir: "{{ netris_lab_dir }}"
-  changed_when: false
-
-- name: Run prerequisites
-  ansible.builtin.include_role:
-    name: prerequisites
-
-- name: Cache container and cloud images
-  ansible.builtin.include_role:
-    name: cache
+- name: Pre-flight checks
+  ansible.builtin.include_tasks: preflight.yml
 
 - name: Deploy K3s and Netris controller
   ansible.builtin.include_role:
