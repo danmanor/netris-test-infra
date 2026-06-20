@@ -1,6 +1,6 @@
 # netris-test-infra
 
-Ansible automation to deploy OCP SNO on a [Netris Spectrum-X simulated lab](https://github.com/danmanor/netris-lab) and run OSAC VMaaS/CaaS end-to-end tests.
+Ansible automation to deploy OCP SNO on a [Netris Spectrum-X simulated lab](https://github.com/danmanor/netris-lab) and run OSAC VMaaS/CaaS/BMaaS end-to-end tests.
 
 ## Architecture
 
@@ -11,7 +11,7 @@ The [netris-lab](https://github.com/danmanor/netris-lab) deploys a full simulate
 - **4 softgate VMs** — provide NAT/L4LB and BGP peering for internet access
 - **4 server VMs** (hgx-00 to hgx-03) — simulated GPU servers, managed by Netris
 
-This repo takes the first server (hgx-00), resizes it for OCP, configures Netris networking (VPC, VNet, Subnet), and installs OpenShift SNO on it using the Assisted Installer.
+This repo takes the first server (hgx-00), resizes it for OCP, configures Netris networking (VPC, VNet, Subnet), and installs OpenShift SNO on it using the Assisted Installer. For CaaS testing, the remaining three servers (hgx-01 to hgx-03) are booted with a discovery ISO and registered as agents for cluster provisioning.
 
 ```
 Bare-metal host
@@ -19,10 +19,14 @@ Bare-metal host
     ├── Netris controller (K3s)
     ├── Switches (leaf/spine fabric)
     ├── Softgates (NAT → internet)
-    └── hgx-00 (resized: 20 vCPU, 64G RAM)
-        ├── VPC/VNet/Subnet configured via Netris API
-        ├── OCP SNO installed via Assisted Installer
-        └── OSAC deployed on top
+    ├── hgx-00 (resized: 20 vCPU, 64G RAM)
+    │   ├── VPC/VNet/Subnet configured via Netris API
+    │   ├── OCP SNO installed via Assisted Installer
+    │   └── OSAC deployed on top
+    └── hgx-01..03 (CaaS only: 4 vCPU, 16G RAM, 100G disk)
+        ├── Booted with discovery ISO from InfraEnv
+        ├── Registered as agents with resource_class + netris.server/name
+        └── Used to provision a CaaS cluster via fulfillment API
 ```
 
 Internet access for OCP image pulls flows through: hgx-00 → NS VNet → softgate SNAT → host iptables masquerade → internet.
@@ -48,13 +52,18 @@ cd netris-test-infra
 cp /path/to/license.key netris-lab/license.key
 cp /path/to/pull-secret /root/pull-secret
 
-# Full flow (deploy lab → configure networking → install OCP)
+# Full VMaaS flow (deploy lab → configure networking → install OCP → install OSAC)
 make all
 
 # Or step by step
 make deploy        # Deploy netris-lab (~45-90 min)
 make configure     # Resize VM + create VPC/VNet/Subnet (~10 min)
 make install-ocp   # Install OCP SNO via Assisted Installer (~30-60 min)
+make install-osac  # Install OSAC on OCP (~30 min)
+
+# CaaS additional steps (after make all)
+make discover-caas-hosts  # Create InfraEnv, boot hgx1-3 with discovery ISO (~15 min)
+make setup-caas           # Annotate agents, create host type + cluster, wait for ready (~60 min)
 
 # Teardown
 make destroy
@@ -109,6 +118,25 @@ ansible-playbook playbooks/site.yml -e ocp_version=4.18
 | `netris_username` | `netris` | API username |
 | `netris_password` | `MaqfC1JBM7zasPE2doVT` | API password (lab default) |
 
+### CaaS Discovery
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `caas_discovery_vm_patterns` | `[hgx-pod00-su0-h01..h03]` | VM name patterns for discovery servers |
+| `caas_discovery_vcpu` | `4` | vCPUs per discovery server |
+| `caas_discovery_memory_mb` | `16384` | Memory in MB (16 GB) |
+| `caas_discovery_disk_gb` | `100` | Boot disk size in GB |
+| `caas_discovery_infraenv_name` | `caas-infraenv` | InfraEnv CR name |
+
+### CaaS Setup
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `caas_host_type_id` | `ci-worker` | Host type ID registered in fulfillment API |
+| `caas_cluster_catalog_item` | `hosted_cluster_offering` | Catalog item for cluster creation |
+| `caas_cluster_name` | `caas-ci-cluster` | Name for the created cluster |
+| `caas_agents` | `[{vm_pattern, netris_server_name}]` | Agent-to-Netris-server mapping |
+
 ## Playbooks
 
 | Playbook | Roles | Purpose |
@@ -116,12 +144,20 @@ ansible-playbook playbooks/site.yml -e ocp_version=4.18
 | `deploy-lab.yml` | `lab_deploy` | Deploy netris-lab (make setup + deploy + verify) |
 | `configure-ocp.yml` | `vm_resize`, `netris_configure` | Resize hgx-00 VM + create VPC/VNet/Subnet |
 | `install-ocp.yml` | `assisted_service`, `ocp_install` | Start Assisted Service, install OCP SNO |
+| `install-osac.yml` | `osac_install` | Install OSAC on OCP SNO |
+| `discover-caas-hosts.yml` | `caas_discovery` | Create InfraEnv, boot hgx1-3 with discovery ISO (CaaS only) |
+| `setup-caas.yml` | `caas_setup` | Annotate agents, create host type + cluster (CaaS only) |
 | `destroy.yml` | `destroy` | Tear down lab + Assisted Service + DNS |
-| `site.yml` | all of the above | Full end-to-end flow |
+| `site.yml` | all common roles | Full end-to-end flow (VMaaS) |
 
 ## CI Integration
 
-Used by the `osac-project-netris-vmaas` workflow in the [openshift/release](https://github.com/openshift/release) step registry. CI steps SSH to an OFCIR bare-metal host, clone this repo with `--recurse-submodules`, and run `make` targets.
+Used by CI workflows in the [openshift/release](https://github.com/openshift/release) step registry:
+
+- **`osac-project-netris-vmaas`** — VMaaS e2e: deploy lab → configure → OCP install → OSAC install → VMaaS tests
+- **`osac-project-netris-caas`** — CaaS e2e: same base + discover agents → setup CaaS cluster → CaaS tests
+
+CI steps SSH to an OFCIR bare-metal host, clone this repo with `--recurse-submodules`, and run `make` targets.
 
 ## Known Limitations
 
