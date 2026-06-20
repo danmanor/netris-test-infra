@@ -8,6 +8,7 @@ Uses [netris-lab](netris-lab/) as a git submodule for the underlying network inf
 
 ```
 roles/                          # Ansible roles (each has tasks/main.yml)
+  lab_setup/                    # Prerequisites, cache, OCP/OSAC tool installs
   lab_deploy/                   # Orchestrates netris-lab submodule roles
   vm_resize/                    # Resize hgx-00 VM for OCP (virsh)
   netris_configure/             # Create VPC/VNet/Subnet/NAT via Netris API
@@ -28,10 +29,11 @@ vendor/                         # Vendored Ansible collections
 ## Commands
 
 ```
-make all                    # prerequisites + deploy + configure + install-ocp + install-osac
-make prerequisites          # Install system packages and pip tools
+make all                    # setup + deploy + ocp-setup + install-ocp + install-osac
+make setup                  # Install prerequisites, cache images, install OCP/OSAC tools
 make deploy                 # Deploy netris-lab
-make configure              # Resize OCP VM + configure Netris networking
+make connectivity           # Re-run lab connectivity (VPN, BGP, softgate agents)
+make ocp-setup              # Resize OCP VM + configure Netris networking
 make install-ocp            # Deploy Assisted Service + install OCP SNO
 make install-osac           # Deploy OSAC + fulfillment-service
 make discover-caas-hosts    # Boot hgx-01..03 with discovery ISO
@@ -42,7 +44,7 @@ make vendor-update          # Refresh vendored Ansible collections
 
 ## Workflow Order
 
-**VMaaS (full):** deploy → configure → install-ocp → install-osac
+**VMaaS (full):** setup → deploy → ocp-setup → install-ocp → install-osac
 
 **CaaS (after VMaaS):** discover-caas-hosts → setup-caas
 
