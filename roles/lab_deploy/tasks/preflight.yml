@@ -9,6 +9,11 @@
     path: "{{ netris_license_file }}"
   register: _license_file
 
+- name: Check pull secret exists
+  ansible.builtin.stat:
+    path: "{{ pull_secret_path }}"
+  register: _pull_secret
+
 - name: Check KVM support
   ansible.builtin.command: grep -c vmx /proc/cpuinfo
   register: _kvm_check
@@ -26,6 +31,7 @@
         []
         + ([] if _lab_dir.stat.exists else ['netris-lab directory not found at ' + netris_lab_dir])
         + ([] if _license_file.stat.exists else ['License file not found at ' + netris_license_file + ' — obtain one from Netris and place it there'])
+        + ([] if _pull_secret.stat.exists else ['Pull secret not found at ' + pull_secret_path + ' — download from console.redhat.com/openshift/downloads'])
         + ([] if (_kvm_check.stdout | default('0') | int > 0) else ['KVM (vmx) not available — nested virtualization or bare metal required'])
         + ([] if (_mem_total_gb | float >= 16.0) else ['Insufficient memory: ' + _mem_total_gb + 'GB available, 16GB minimum required'])
       }}
