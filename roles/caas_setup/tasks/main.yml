@@ -1,0 +1,117 @@
+---
+# Step 1: Wait for all agents to register from the discovery ISO boot
+- name: Wait for expected number of agents
+  ansible.builtin.shell:
+    cmd: oc get agent -n {{ caas_agent_namespace }} --no-headers 2>/dev/null | wc -l
+  register: _agent_count
+  until: _agent_count.stdout | int >= caas_agents | length
+  retries: 120
+  delay: 15
+
+- name: Get agent names
+  ansible.builtin.shell:
+    cmd: oc get agent -n {{ caas_agent_namespace }} -o jsonpath='{.items[*].metadata.name}'
+  register: _agent_names
+
+- name: Set agent name list
+  ansible.builtin.set_fact:
+    caas_agent_names: "{{ _agent_names.stdout.split() }}"
+
+# Step 2: Label agents with resource class and netris server name
+- name: Label agent with resource class
+  ansible.builtin.command:
+    cmd: >-
+      oc label agent/{{ item }} -n {{ caas_agent_namespace }}
+      osac.openshift.io/resource_class={{ caas_host_type_id }}
+      --overwrite
+  loop: "{{ caas_agent_names }}"
+  changed_when: true
+
+- name: Label agent with netris server name
+  ansible.builtin.command:
+    cmd: >-
+      oc label agent/{{ caas_agent_names[idx] }} -n {{ caas_agent_namespace }}
+      netris.server/name={{ item.netris_server_name }}
+      --overwrite
+  loop: "{{ caas_agents }}"
+  loop_control:
+    index_var: idx
+  changed_when: true
+
+- name: Approve agents
+  ansible.builtin.command:
+    cmd: >-
+      oc patch agent/{{ item }} -n {{ caas_agent_namespace }}
+      --type=merge -p '{"spec":{"approved":true}}'
+  loop: "{{ caas_agent_names }}"
+  changed_when: true
+
+# Step 3: Register host type in fulfillment service
+- name: Get fulfillment internal API URL
+  ansible.builtin.shell:
+    cmd: oc get route fulfillment-internal-api -n {{ osac_namespace }} -o jsonpath='{.status.ingress[0].host}'
+  register: _fulfillment_host
+
+- name: Set fulfillment API URL
+  ansible.builtin.set_fact:
+    caas_fulfillment_api: "https://{{ _fulfillment_host.stdout }}"
+
+- name: Get service account token
+  ansible.builtin.shell:
+    cmd: oc create token -n {{ osac_namespace }} admin
+  register: _sa_token
+
+- name: Create host type
+  ansible.builtin.uri:
+    url: "{{ caas_fulfillment_api }}/api/private/v1/host_types"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ _sa_token.stdout }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      id: "{{ caas_host_type_id }}"
+      title: "{{ caas_host_type_title }}"
+      description: "{{ caas_host_type_description }}"
+    validate_certs: false
+    status_code: [200, 201, 409]
+
+# Step 4: Configure osac CLI and create cluster
+- name: Configure osac CLI
+  ansible.builtin.copy:
+    content: |
+      {
+        "token_script": "oc create token -n {{ osac_namespace }} admin --duration 1h",
+        "insecure": true,
+        "address": "{{ _fulfillment_host.stdout }}:443"
+      }
+    dest: /root/.config/osac/config.json
+    mode: "0600"
+
+- name: Create cluster
+  ansible.builtin.command:
+    cmd: osac create cluster --catalog-item {{ caas_cluster_catalog_item }} --name {{ caas_cluster_name }}
+  register: _cluster_create
+  changed_when: true
+
+- name: Extract cluster ID
+  ansible.builtin.set_fact:
+    caas_cluster_id: "{{ _cluster_create.stdout | regex_search('[0-9a-f-]{36}') }}"
+
+- name: Report cluster creation started
+  ansible.builtin.debug:
+    msg: "Cluster '{{ caas_cluster_name }}' created with ID {{ caas_cluster_id }}"
+
+# Step 5: Wait for cluster to become ready
+- name: Wait for cluster to be ready
+  ansible.builtin.shell:
+    cmd: osac get clusters {{ caas_cluster_id }} -o json | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',{}).get('state',''))"
+  register: _cluster_state
+  until: _cluster_state.stdout == "CLUSTER_STATE_READY"
+  retries: 120
+  delay: 30
+  failed_when: _cluster_state.stdout == "CLUSTER_STATE_FAILED"
+
+- name: Report cluster ready
+  ansible.builtin.debug:
+    msg: "CaaS cluster '{{ caas_cluster_name }}' ({{ caas_cluster_id }}) is READY"

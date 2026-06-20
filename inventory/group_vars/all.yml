@@ -43,3 +43,29 @@ osac_namespace: "osac"
 osac_kustomize_overlay: "vmaas-ci"
 osac_values_file: "values/vmaas-ci.yaml"
 osac_license_path: "{{ inventory_dir }}/../license.zip"
+
+# CaaS Discovery (boot remaining servers with discovery ISO)
+caas_discovery_vm_patterns:
+  - "hgx-pod00-su0-h01"
+  - "hgx-pod00-su0-h02"
+  - "hgx-pod00-su0-h03"
+caas_discovery_vcpu: 4
+caas_discovery_memory_mb: 16384
+caas_discovery_disk_gb: 100
+caas_discovery_infraenv_name: "caas-infraenv"
+caas_discovery_infraenv_namespace: "{{ osac_namespace }}"
+
+# CaaS Setup (host type, agent annotations, cluster creation)
+caas_agent_namespace: "{{ osac_namespace }}"
+caas_host_type_id: "ci-worker"
+caas_host_type_title: "CI Worker"
+caas_host_type_description: "Worker nodes for CI testing"
+caas_cluster_catalog_item: "hosted_cluster_offering"
+caas_cluster_name: "caas-ci-cluster"
+caas_agents:
+  - vm_pattern: "hgx-pod00-su0-h01"
+    netris_server_name: "hgx-pod00-su0-h01"
+  - vm_pattern: "hgx-pod00-su0-h02"
+    netris_server_name: "hgx-pod00-su0-h02"
+  - vm_pattern: "hgx-pod00-su0-h03"
+    netris_server_name: "hgx-pod00-su0-h03"

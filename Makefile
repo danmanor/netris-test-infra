@@ -1,4 +1,4 @@
-.PHONY: all prerequisites deploy configure install-ocp install-osac destroy vendor-update
+.PHONY: all prerequisites deploy configure install-ocp install-osac discover-caas-hosts setup-caas destroy vendor-update
 
 all: prerequisites deploy configure install-ocp install-osac
 
@@ -17,6 +17,12 @@ install-ocp:
 
 install-osac:
 	ansible-playbook playbooks/install-osac.yml
+
+discover-caas-hosts:
+	ansible-playbook playbooks/discover-caas-hosts.yml
+
+setup-caas:
+	ansible-playbook playbooks/setup-caas.yml
 
 destroy:
 	ansible-playbook playbooks/destroy.yml

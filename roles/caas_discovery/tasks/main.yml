@@ -1,0 +1,139 @@
+---
+- name: Read SSH public key
+  ansible.builtin.slurp:
+    src: "{{ ssh_public_key_path }}"
+  register: _ssh_pub_key
+
+- name: Read pull secret
+  ansible.builtin.slurp:
+    src: "{{ pull_secret_path }}"
+  register: _pull_secret
+  no_log: true
+
+- name: Ensure pull-secret exists in namespace
+  ansible.builtin.shell:
+    cmd: >
+      oc get secret pull-secret -n {{ caas_discovery_infraenv_namespace }} ||
+      oc create secret generic pull-secret -n {{ caas_discovery_infraenv_namespace }}
+      --from-literal=.dockerconfigjson='{{ _pull_secret.content | b64decode | trim }}'
+      --type=kubernetes.io/dockerconfigjson
+  no_log: true
+  changed_when: true
+
+- name: Create InfraEnv CR
+  ansible.builtin.template:
+    src: infraenv.yml.j2
+    dest: /tmp/caas-infraenv.yml
+    mode: "0600"
+
+- name: Apply InfraEnv CR
+  ansible.builtin.command:
+    cmd: oc apply -f /tmp/caas-infraenv.yml
+  changed_when: true
+
+- name: Wait for discovery ISO URL
+  ansible.builtin.shell:
+    cmd: oc get infraenv {{ caas_discovery_infraenv_name }} -n {{ caas_discovery_infraenv_namespace }} -o jsonpath='{.status.isoDownloadURL}'
+  register: _iso_url
+  until: _iso_url.stdout | length > 0
+  retries: 60
+  delay: 10
+
+- name: Download discovery ISO
+  ansible.builtin.get_url:
+    url: "{{ _iso_url.stdout }}"
+    dest: /var/lib/libvirt/images/caas-discovery.iso
+    mode: "0644"
+    force: true
+  register: _iso_download
+
+- name: Find discovery VMs
+  ansible.builtin.shell:
+    cmd: virsh list --all --name | grep "{{ item }}"
+  register: _discovery_vm_lookup
+  changed_when: false
+  loop: "{{ caas_discovery_vm_patterns }}"
+
+- name: Build VM name list
+  ansible.builtin.set_fact:
+    caas_discovery_vms: "{{ _discovery_vm_lookup.results | map(attribute='stdout_lines') | map('first') | list }}"
+
+- name: Shut down VMs if running
+  ansible.builtin.shell:
+    cmd: |
+      state=$(virsh domstate {{ item }})
+      if [ "$state" = "running" ]; then
+        virsh destroy {{ item }}
+      fi
+  loop: "{{ caas_discovery_vms }}"
+  changed_when: true
+
+- name: Set maximum vCPUs
+  ansible.builtin.command:
+    cmd: virsh setvcpus {{ item }} {{ caas_discovery_vcpu }} --config --maximum
+  loop: "{{ caas_discovery_vms }}"
+  changed_when: true
+
+- name: Set vCPUs
+  ansible.builtin.command:
+    cmd: virsh setvcpus {{ item }} {{ caas_discovery_vcpu }} --config
+  loop: "{{ caas_discovery_vms }}"
+  changed_when: true
+
+- name: Set maximum memory
+  ansible.builtin.command:
+    cmd: virsh setmaxmem {{ item }} {{ caas_discovery_memory_mb }}M --config
+  loop: "{{ caas_discovery_vms }}"
+  changed_when: true
+
+- name: Set memory
+  ansible.builtin.command:
+    cmd: virsh setmem {{ item }} {{ caas_discovery_memory_mb }}M --config
+  loop: "{{ caas_discovery_vms }}"
+  changed_when: true
+
+- name: Detach existing disks
+  ansible.builtin.shell:
+    cmd: |
+      for target in $(virsh domblklist {{ item }} --details | awk 'NR>2 && $1=="file" {print $3}'); do
+        virsh detach-disk {{ item }} "$target" --config || true
+      done
+  loop: "{{ caas_discovery_vms }}"
+  changed_when: true
+
+- name: Create empty boot disk for each VM
+  ansible.builtin.command:
+    cmd: qemu-img create -f qcow2 /var/lib/libvirt/images/{{ item }}-disk.qcow2 {{ caas_discovery_disk_gb }}G
+  loop: "{{ caas_discovery_vms }}"
+  changed_when: true
+
+- name: Attach boot disk
+  ansible.builtin.command:
+    cmd: virsh attach-disk {{ item }} /var/lib/libvirt/images/{{ item }}-disk.qcow2 vda --persistent --subdriver qcow2
+  loop: "{{ caas_discovery_vms }}"
+  changed_when: true
+
+- name: Attach discovery ISO as cdrom
+  ansible.builtin.command:
+    cmd: virsh attach-disk {{ item }} /var/lib/libvirt/images/caas-discovery.iso sda --type cdrom --config
+  loop: "{{ caas_discovery_vms }}"
+  changed_when: true
+
+- name: Set boot order to disk then cdrom
+  ansible.builtin.command:
+    cmd: virt-xml {{ item }} --edit --boot hd,cdrom
+  loop: "{{ caas_discovery_vms }}"
+  changed_when: true
+
+- name: Start discovery VMs
+  ansible.builtin.command:
+    cmd: virsh start {{ item }}
+  loop: "{{ caas_discovery_vms }}"
+  changed_when: true
+
+- name: Report CaaS discovery hosts started
+  ansible.builtin.debug:
+    msg: >-
+      CaaS discovery: {{ caas_discovery_vms | length }} VMs booted with discovery ISO
+      ({{ caas_discovery_vcpu }} vCPU, {{ caas_discovery_memory_mb }}MB RAM,
+      {{ caas_discovery_disk_gb }}GB disk, boot order: disk,cdrom)

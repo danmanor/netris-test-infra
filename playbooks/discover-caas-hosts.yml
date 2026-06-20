@@ -1,0 +1,6 @@
+---
+- name: Create InfraEnv and boot CaaS discovery hosts
+  hosts: all
+  gather_facts: false
+  roles:
+    - caas_discovery

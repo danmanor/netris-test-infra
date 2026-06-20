@@ -1,0 +1,6 @@
+---
+- name: Set up CaaS host type, annotate agents, and create cluster
+  hosts: all
+  gather_facts: false
+  roles:
+    - caas_setup
