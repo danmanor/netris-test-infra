@@ -45,6 +45,11 @@ vmaas:
 bmaas:
 	@echo "BMaaS flow is not yet implemented"
 
+destroy-osac:
+	@echo "=== Tearing down OSAC ==="
+	cd /opt/osac-installer && source /tmp/osac-setup.env && \
+		EXTRA_SERVICES=true ./scripts/teardown.sh
+
 destroy:
 	ansible-playbook playbooks/destroy.yml $(ANSIBLE_EXTRA)
 
