@@ -47,6 +47,7 @@
     url: "{{ _iso_url.stdout }}"
     dest: /var/lib/libvirt/images/caas-discovery.iso
     mode: "0644"
+    validate_certs: false
   register: _iso_download
 
 - name: Find discovery VMs
