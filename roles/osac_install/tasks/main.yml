@@ -18,6 +18,15 @@
     mode: "0600"
     force: false
 
+- name: Create OSAC namespace if missing
+  ansible.builtin.command:
+    cmd: oc create namespace {{ osac_namespace }}
+  environment:
+    KUBECONFIG: /root/.kube/config
+  register: _ns_create
+  failed_when: false
+  changed_when: _ns_create.rc == 0
+
 - name: Clone osac-installer
   ansible.builtin.git:
     repo: "{{ osac_installer_repo }}"
