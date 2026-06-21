@@ -1,11 +1,11 @@
-.PHONY: deploy setup deploy-lab deploy-ocp deploy-osac setup-caas deploy-caas deploy-vmaas deploy-bmaas \
-       destroy destroy-osac destroy-ocp destroy-caas destroy-vmaas destroy-bmaas \
+.PHONY: deploy setup deploy-lab deploy-ocp deploy-osac setup-caas deploy-caas \
+       destroy destroy-osac destroy-ocp \
        connectivity prep-osac run-osac-setup vendor-update lint
 
 EXTRA_VARS ?=
 ANSIBLE_EXTRA = $(if $(EXTRA_VARS),-e '$(EXTRA_VARS)')
 
-# Full shared pipeline — deploy everything (used by all flows)
+# Full shared pipeline
 deploy: setup deploy-lab deploy-ocp deploy-osac
 
 setup:
@@ -30,18 +30,12 @@ run-osac-setup:
 	@echo "=== Running OSAC setup.sh with live output ==="
 	cd /opt/osac-installer && source /tmp/osac-setup.env && ./scripts/setup.sh
 
-# Per-flow targets — run after deploy
+# CaaS flow
 setup-caas:
 	ansible-playbook playbooks/setup-caas.yml $(ANSIBLE_EXTRA)
 
 deploy-caas:
 	ansible-playbook playbooks/deploy-caas.yml $(ANSIBLE_EXTRA)
-
-deploy-vmaas:
-	@echo "VMaaS flow is not yet implemented"
-
-deploy-bmaas:
-	@echo "BMaaS flow is not yet implemented"
 
 # Destroy targets
 destroy:
@@ -57,15 +51,6 @@ destroy-osac:
 
 destroy-ocp:
 	ansible-playbook playbooks/reset-ocp.yml $(ANSIBLE_EXTRA)
-
-destroy-caas:
-	@echo "CaaS teardown is not yet implemented"
-
-destroy-vmaas:
-	@echo "VMaaS teardown is not yet implemented"
-
-destroy-bmaas:
-	@echo "BMaaS teardown is not yet implemented"
 
 # Utilities
 vendor-update:
