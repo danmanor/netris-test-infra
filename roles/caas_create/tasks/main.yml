@@ -6,30 +6,18 @@
   changed_when: false
   failed_when: false
 
-- name: Read pull secret
-  ansible.builtin.slurp:
-    src: "{{ pull_secret_path }}"
-  register: _pull_secret
-  no_log: true
-
-- name: Read SSH public key
-  ansible.builtin.slurp:
-    src: "{{ ssh_public_key_path }}"
-  register: _ssh_pub_key
-
 - name: Create cluster
-  ansible.builtin.shell:
+  ansible.builtin.command:
     cmd: >-
       osac create cluster
-      --catalog-item {{ caas_cluster_template }}
+      --template {{ caas_cluster_template }}
       --release-image {{ caas_release_image }}
-      --set pull_secret='{{ _pull_secret.content | b64decode | trim }}'
-      --set ssh_public_key='{{ _ssh_pub_key.content | b64decode | trim }}'
+      -f pull_secret={{ pull_secret_path }}
+      -f ssh_public_key={{ ssh_public_key_path }}
       --name {{ caas_cluster_name }}
   register: _cluster_create
   when: _cluster_exists.stdout | default('') != 'exists'
   changed_when: true
-  no_log: true
 
 - name: Get existing cluster ID
   ansible.builtin.shell:
