@@ -55,19 +55,12 @@
     replace: ''
 
 - name: Disable bare-metal fulfillment operator
-  ansible.builtin.lineinfile:
+  ansible.builtin.replace:
     path: "{{ osac_installer_dir }}/{{ osac_values_file }}"
-    regexp: '^\s*#?\s*bmf:'
-    line: "bmf:"
-    state: present
-  register: _bmf_header
-
-- name: Set bmf.enabled to false
-  ansible.builtin.lineinfile:
-    path: "{{ osac_installer_dir }}/{{ osac_values_file }}"
-    insertafter: '^bmf:'
-    regexp: '^\s*enabled:'
-    line: "  enabled: false"
+    regexp: '^bmf:$'
+    replace: |-
+      bmf:
+        enabled: false
 
 - name: Override component images in values file
   when: osac_operator_image or fulfillment_service_image or osac_aap_image
