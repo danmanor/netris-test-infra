@@ -75,20 +75,20 @@
   register: _pull_secret
   no_log: true
 
-- name: Create hardware-inventory namespace
+- name: Create InfraEnv namespace
   ansible.builtin.command:
-    cmd: oc create namespace hardware-inventory
+    cmd: oc create namespace {{ caas_discovery_infraenv_namespace }}
   environment:
     KUBECONFIG: /root/.kube/config
   register: _ns_create
   failed_when: false
   changed_when: _ns_create.rc == 0
 
-- name: Ensure pull-secret exists in hardware-inventory namespace
+- name: Ensure pull-secret exists in InfraEnv namespace
   ansible.builtin.shell:
     cmd: >
-      oc get secret pull-secret -n hardware-inventory ||
-      oc create secret generic pull-secret -n hardware-inventory
+      oc get secret pull-secret -n {{ caas_discovery_infraenv_namespace }} ||
+      oc create secret generic pull-secret -n {{ caas_discovery_infraenv_namespace }}
       --from-literal=.dockerconfigjson='{{ _pull_secret.content | b64decode | trim }}'
       --type=kubernetes.io/dockerconfigjson
   environment:
@@ -111,7 +111,7 @@
 
 - name: Wait for discovery ISO URL
   ansible.builtin.shell:
-    cmd: oc get infraenv infraenv -n hardware-inventory -o jsonpath='{.status.isoDownloadURL}'
+    cmd: oc get infraenv {{ caas_discovery_infraenv_name }} -n {{ caas_discovery_infraenv_namespace }} -o jsonpath='{.status.isoDownloadURL}'
   register: _iso_url
   until: _iso_url.stdout | length > 0
   retries: 60

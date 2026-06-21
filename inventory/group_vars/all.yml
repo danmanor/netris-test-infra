@@ -63,8 +63,8 @@ caas_discovery_vm_patterns:
 caas_discovery_vcpu: 4
 caas_discovery_memory_mb: 16384
 caas_discovery_disk_gb: 100
-caas_discovery_infraenv_name: "caas-infraenv"
-caas_discovery_infraenv_namespace: "{{ osac_namespace }}"
+caas_discovery_infraenv_name: "infraenv"
+caas_discovery_infraenv_namespace: "hardware-inventory"
 
 # CaaS Setup (host type, agent annotations, cluster creation)
 caas_agent_namespace: "{{ osac_namespace }}"
