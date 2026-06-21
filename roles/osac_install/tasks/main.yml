@@ -214,51 +214,42 @@
     mode: "0600"
   no_log: true
 
-- name: Run OSAC setup.sh (async)
-  ansible.builtin.shell:
-    cmd: bash -c 'exec > >(tee /tmp/osac-setup.log) 2>&1; ./scripts/setup.sh'
-    chdir: "{{ osac_installer_dir }}"
-  environment:
-    KUBECONFIG: /root/.kube/config
-    DEPLOY_MODE: helm
-    INSTALLER_NAMESPACE: "{{ osac_namespace }}"
-    INSTALLER_KUSTOMIZE_OVERLAY: "{{ osac_kustomize_overlay }}"
-    VALUES_FILE: "{{ osac_values_file }}"
-    VIRT_SERVICE: "true"
-    STORAGE_SERVICE: "true"
-    INGRESS_SERVICE: "true"
-    AAP_EE_IMAGE: "{{ osac_aap_image if osac_aap_image else omit }}"
-    NETWORK_CLASS: netris
-    NETWORK_STEPS_COLLECTION: netris.steps
-    EXTERNAL_ACCESS_BASE_DOMAIN: "{{ ocp_base_domain }}"
-    EXTERNAL_ACCESS_SUPPORTED_BASE_DOMAINS: "{{ ocp_base_domain }}"
-    EXTERNAL_ACCESS_API_INTERNAL_NETWORK: hypershift
-    HOSTED_CLUSTER_BASE_DOMAIN: "{{ ocp_base_domain }}"
-    HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY: SingleReplica
-    HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY: SingleReplica
-    NETRIS_CONTROLLER_URL: "{{ _netris_ctl_url }}"
-    NETRIS_USERNAME: "{{ netris_username }}"
-    NETRIS_PASSWORD: "{{ netris_password }}"
-    NETRIS_SITE_ID: "{{ _netris_site_id }}"
-    NETRIS_TENANT_ID: "1"
-    NETRIS_TENANT_NAME: Admin
-    NETRIS_MGMT_VPC_ID: "{{ _netris_mgmt_vpc_id }}"
-    NETRIS_MGMT_VPC_NAME: "{{ ocp_vpc_name }}"
-    NETRIS_RESOURCE_CLASS_MAP: "{{ _netris_resource_class_map }}"
-    SERVER_SSH_BASTION_HOST: "192.168.16.254"
-    SERVER_SSH_BASTION_USER: root
-    SERVER_SSH_USER: root
-    SERVER_MGMT_ROUTE_DESTINATION: "192.168.16.0/20"
-    SERVER_MGMT_ROUTE_GATEWAY: "192.168.16.1"
-  register: _setup_result
-  changed_when: true
-  timeout: 3600
+- name: Write setup.sh environment file
+  ansible.builtin.copy:
+    dest: /tmp/osac-setup.env
+    content: |
+      export KUBECONFIG=/root/.kube/config
+      export DEPLOY_MODE=helm
+      export INSTALLER_NAMESPACE={{ osac_namespace }}
+      export INSTALLER_KUSTOMIZE_OVERLAY={{ osac_kustomize_overlay }}
+      export VALUES_FILE={{ osac_values_file }}
+      export VIRT_SERVICE=true
+      export STORAGE_SERVICE=true
+      export INGRESS_SERVICE=true
+      export NETWORK_CLASS=netris
+      export NETWORK_STEPS_COLLECTION=netris.steps
+      export EXTERNAL_ACCESS_BASE_DOMAIN={{ ocp_base_domain }}
+      export EXTERNAL_ACCESS_SUPPORTED_BASE_DOMAINS={{ ocp_base_domain }}
+      export EXTERNAL_ACCESS_API_INTERNAL_NETWORK=hypershift
+      export HOSTED_CLUSTER_BASE_DOMAIN={{ ocp_base_domain }}
+      export HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY=SingleReplica
+      export HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY=SingleReplica
+      export NETRIS_CONTROLLER_URL={{ _netris_ctl_url }}
+      export NETRIS_USERNAME={{ netris_username }}
+      export NETRIS_PASSWORD={{ netris_password }}
+      export NETRIS_SITE_ID={{ _netris_site_id }}
+      export NETRIS_TENANT_ID=1
+      export NETRIS_TENANT_NAME=Admin
+      export NETRIS_MGMT_VPC_ID={{ _netris_mgmt_vpc_id }}
+      export NETRIS_MGMT_VPC_NAME={{ ocp_vpc_name }}
+      export NETRIS_RESOURCE_CLASS_MAP='{{ _netris_resource_class_map }}'
+      export SERVER_SSH_BASTION_HOST=192.168.16.254
+      export SERVER_SSH_BASTION_USER=root
+      export SERVER_SSH_USER=root
+      export SERVER_MGMT_ROUTE_DESTINATION=192.168.16.0/20
+      export SERVER_MGMT_ROUTE_GATEWAY=192.168.16.1
+    mode: "0600"
 
-- name: Show setup.sh output
+- name: Report OSAC preparation complete
   ansible.builtin.debug:
-    msg: "{{ _setup_result.stdout_lines }}"
-  when: _setup_result.stdout_lines is defined
-
-- name: Report OSAC installation complete
-  ansible.builtin.debug:
-    msg: "OSAC installed in namespace {{ osac_namespace }}"
+    msg: "OSAC prepared. Run 'make run-osac-setup' to execute setup.sh with live output."

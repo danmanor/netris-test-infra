@@ -21,8 +21,14 @@ setup-ocp:
 install-ocp:
 	ansible-playbook playbooks/install-ocp.yml $(ANSIBLE_EXTRA)
 
-install-osac:
+install-osac: prep-osac run-osac-setup
+
+prep-osac:
 	ansible-playbook playbooks/install-osac.yml $(ANSIBLE_EXTRA)
+
+run-osac-setup:
+	@echo "=== Running OSAC setup.sh with live output ==="
+	cd /opt/osac-installer && source /tmp/osac-setup.env && ./scripts/setup.sh
 
 # Per-flow targets — run after deploy-osac
 caas: discover-caas-hosts setup-caas
