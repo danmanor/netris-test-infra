@@ -214,9 +214,9 @@
     mode: "0600"
   no_log: true
 
-- name: Run OSAC setup.sh
-  ansible.builtin.command:
-    cmd: ./scripts/setup.sh
+- name: Run OSAC setup.sh (log at /tmp/osac-setup.log)
+  ansible.builtin.shell:
+    cmd: ./scripts/setup.sh 2>&1 | tee /tmp/osac-setup.log
     chdir: "{{ osac_installer_dir }}"
   environment:
     KUBECONFIG: /root/.kube/config
