@@ -55,12 +55,12 @@
     replace: ''
 
 - name: Disable bare-metal fulfillment operator
-  ansible.builtin.replace:
+  ansible.builtin.blockinfile:
     path: "{{ osac_installer_dir }}/{{ osac_values_file }}"
-    regexp: '^bmf:$'
-    replace: |-
+    block: |
       bmf:
         enabled: false
+    marker: "# {mark} NETRIS-TEST-INFRA BMF OVERRIDE"
 
 - name: Override component images in values file
   when: osac_operator_image or fulfillment_service_image or osac_aap_image
