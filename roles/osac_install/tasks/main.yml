@@ -233,7 +233,7 @@
       NETRIS_TENANT_NAME=Admin
       NETRIS_MGMT_VPC_ID={{ _netris_mgmt_vpc_id }}
       NETRIS_MGMT_VPC_NAME={{ ocp_vpc_name }}
-      NETRIS_RESOURCE_CLASS_MAP={{ _netris_resource_class_map }}
+      NETRIS_RESOURCE_CLASS_MAP={{ _netris_resource_class_map | to_json }}
       SERVER_MGMT_ROUTE_DESTINATION=192.168.16.0/20
       SERVER_MGMT_ROUTE_GATEWAY=192.168.16.1
       SERVER_SSH_BASTION_HOST=192.168.16.254
@@ -278,7 +278,7 @@
       export NETRIS_TENANT_NAME=Admin
       export NETRIS_MGMT_VPC_ID={{ _netris_mgmt_vpc_id }}
       export NETRIS_MGMT_VPC_NAME={{ ocp_vpc_name }}
-      export NETRIS_RESOURCE_CLASS_MAP='{{ _netris_resource_class_map }}'
+      export NETRIS_RESOURCE_CLASS_MAP='{{ _netris_resource_class_map | to_json }}'
       export SERVER_SSH_BASTION_HOST=192.168.16.254
       export SERVER_SSH_BASTION_USER=root
       export SERVER_SSH_USER=root
