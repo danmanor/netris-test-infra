@@ -56,7 +56,8 @@ cp /path/to/pull-secret /root/pull-secret
 make deploy
 
 # Then run a test flow
-make deploy-caas   # CaaS: discover agents + create cluster
+make setup-caas    # CaaS setup: discover hosts, label agents, register host type
+make deploy-caas   # CaaS: create cluster
 ```
 
 After `make deploy-ocp`, the kubeconfig is at `/root/.kube/config`.
@@ -73,13 +74,17 @@ After `make deploy-ocp`, the kubeconfig is at `/root/.kube/config`.
 | `make deploy-ocp` | Resize OCP VM + Netris networking + Assisted Service + OCP SNO | ~35-65 min |
 | `make deploy-osac` | Prepare OSAC overlay + run setup.sh (live output) | ~30-60 min |
 
-### Per-flow (run after deploy)
+### CaaS (run after deploy)
 
 | Target | Description | Time |
 |--------|-------------|------|
-| `make deploy-caas` | CaaS flow: discover-caas-hosts + setup-caas | ~75 min |
-| `make discover-caas-hosts` | Boot hgx-01..03 with discovery ISO | ~15 min |
-| `make setup-caas` | Label agents, create host type + cluster | ~60 min |
+| `make setup-caas` | Discover hosts, label agents, register host type, configure osac CLI | ~30 min |
+| `make deploy-caas` | Create CaaS cluster using `ocp_ci_small` template | ~60 min |
+
+### Other flows (run after deploy)
+
+| Target | Description | Time |
+|--------|-------------|------|
 | `make deploy-vmaas` | VMaaS flow (not yet implemented) | — |
 | `make deploy-bmaas` | BMaaS flow (not yet implemented) | — |
 
@@ -128,6 +133,12 @@ make deploy-ocp     # reinstall
 make connectivity   # re-runs VPN, socat, ISP FRR, softgate agents
 ```
 
+**Deploy CaaS after OSAC is up:**
+```bash
+make setup-caas     # discover hosts, label agents, register host type
+make deploy-caas    # create cluster
+```
+
 **Rebuild from scratch:**
 ```bash
 make destroy        # tear down everything
@@ -169,14 +180,9 @@ make deploy-osac EXTRA_VARS='{"osac_installer_branch": "feature-x"}'
 | `netris_username` | `netris` | Netris API username |
 | `netris_password` | `netris` | Netris API password |
 | `ew_fabric_enable` | `0` | East-West fabric (0=NS only) |
+| `caas_ocp_version` | `4.21` | OCP version for CaaS discovery ISO and release image |
+| `caas_cluster_template` | `ocp_ci_small` | Cluster template for CaaS cluster creation |
+| `caas_cluster_name` | `caas-ci-cluster` | CaaS cluster name |
+| `caas_host_type_id` | `ci-worker` | Resource class for CaaS agents |
 
 See [`inventory/group_vars/all.yml`](inventory/group_vars/all.yml) for the full list.
-
-## CI Integration
-
-Used by CI workflows in the [openshift/release](https://github.com/openshift/release) step registry:
-
-- **`osac-project-netris-vmaas`** — VMaaS e2e: deploy lab → configure → OCP install → OSAC install → VMaaS tests
-- **`osac-project-netris-caas`** — CaaS e2e: same base + discover agents → setup CaaS cluster → CaaS tests
-
-CI steps SSH to an OFCIR bare-metal host, clone this repo with `--recurse-submodules`, and run `make` targets.

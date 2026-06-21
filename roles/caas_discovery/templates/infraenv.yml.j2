@@ -5,6 +5,7 @@ metadata:
   name: {{ caas_discovery_infraenv_name }}
   namespace: {{ caas_discovery_infraenv_namespace }}
 spec:
+  osClusterVersion: "{{ caas_ocp_version }}"
   pullSecretRef:
     name: pull-secret
   sshAuthorizedKey: {{ _ssh_pub_key.content | b64decode | trim }}

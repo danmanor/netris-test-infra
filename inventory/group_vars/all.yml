@@ -51,6 +51,10 @@ osac_aap_image: ""
 fulfillment_service_repo: "https://github.com/osac-project/fulfillment-service.git"
 fulfillment_service_branch: "main"
 
+# CaaS OCP Version
+caas_ocp_version: "4.21"
+caas_release_image: "quay.io/openshift-release-dev/ocp-release:{{ caas_ocp_version }}.0-multi"
+
 # CaaS Discovery (boot remaining servers with discovery ISO)
 caas_discovery_vm_patterns:
   - "hgx-pod00-su0-h01"
@@ -67,7 +71,7 @@ caas_agent_namespace: "{{ osac_namespace }}"
 caas_host_type_id: "ci-worker"
 caas_host_type_title: "CI Worker"
 caas_host_type_description: "Worker nodes for CI testing"
-caas_cluster_catalog_item: "hosted_cluster_offering"
+caas_cluster_template: "ocp_ci_small"
 caas_cluster_name: "caas-ci-cluster"
 caas_agents:
   - vm_pattern: "hgx-pod00-su0-h01"

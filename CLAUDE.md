@@ -35,7 +35,8 @@ make deploy-lab             # Deploy netris-lab
 make connectivity           # Re-run lab connectivity (VPN, BGP, softgate agents)
 make deploy-ocp             # Resize OCP VM + configure Netris networking + install OCP SNO
 make deploy-osac            # Deploy OSAC + fulfillment-service
-make deploy-caas            # CaaS flow: discover-caas-hosts + setup-caas
+make setup-caas             # CaaS setup: discover hosts, label agents, register host type
+make deploy-caas            # CaaS: create cluster
 make deploy-vmaas           # VMaaS flow (not yet implemented)
 make deploy-bmaas           # BMaaS flow (not yet implemented)
 make destroy                # Teardown all infrastructure
@@ -49,7 +50,7 @@ make vendor-update          # Refresh vendored Ansible collections
 
 **Shared (all flows):** deploy (setup → deploy-lab → deploy-ocp → deploy-osac)
 
-**CaaS:** deploy → deploy-caas (discover-caas-hosts → setup-caas)
+**CaaS:** deploy → setup-caas → deploy-caas
 
 **VMaaS:** deploy → deploy-vmaas (not yet implemented)
 

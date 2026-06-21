@@ -1,6 +1,6 @@
-.PHONY: deploy setup deploy-lab deploy-ocp deploy-osac deploy-caas deploy-vmaas deploy-bmaas \
+.PHONY: deploy setup deploy-lab deploy-ocp deploy-osac setup-caas deploy-caas deploy-vmaas deploy-bmaas \
        destroy destroy-osac destroy-ocp destroy-caas destroy-vmaas destroy-bmaas \
-       connectivity prep-osac run-osac-setup discover-caas-hosts setup-caas vendor-update lint
+       connectivity prep-osac run-osac-setup vendor-update lint
 
 EXTRA_VARS ?=
 ANSIBLE_EXTRA = $(if $(EXTRA_VARS),-e '$(EXTRA_VARS)')
@@ -31,13 +31,11 @@ run-osac-setup:
 	cd /opt/osac-installer && source /tmp/osac-setup.env && ./scripts/setup.sh
 
 # Per-flow targets — run after deploy
-deploy-caas: discover-caas-hosts setup-caas
-
-discover-caas-hosts:
-	ansible-playbook playbooks/discover-caas-hosts.yml $(ANSIBLE_EXTRA)
-
 setup-caas:
 	ansible-playbook playbooks/setup-caas.yml $(ANSIBLE_EXTRA)
+
+deploy-caas:
+	ansible-playbook playbooks/deploy-caas.yml $(ANSIBLE_EXTRA)
 
 deploy-vmaas:
 	@echo "VMaaS flow is not yet implemented"
