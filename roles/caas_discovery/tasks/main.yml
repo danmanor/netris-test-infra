@@ -1,4 +1,42 @@
 ---
+- name: Scale down infrastructure-operator
+  ansible.builtin.command:
+    cmd: oc scale deployment infrastructure-operator -n multicluster-engine --replicas=0
+  environment:
+    KUBECONFIG: /root/.kube/config
+  changed_when: true
+  failed_when: false
+
+- name: Filter OS_IMAGES to target version and architecture
+  ansible.builtin.shell:
+    cmd: |
+      OS_IMAGES=$(oc get configmap assisted-service -n multicluster-engine -o jsonpath='{.data.OS_IMAGES}')
+      FILTERED=$(echo "$OS_IMAGES" | python3 -c "
+      import json, sys
+      imgs = json.load(sys.stdin)
+      filtered = [i for i in imgs if i['openshift_version'] == '{{ caas_ocp_version }}' and i['cpu_architecture'] == 'x86_64']
+      print(json.dumps(filtered))
+      ")
+      oc patch configmap assisted-service -n multicluster-engine --type=merge \
+        -p "{\"data\":{\"OS_IMAGES\":$(echo "$FILTERED" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')}}"
+  environment:
+    KUBECONFIG: /root/.kube/config
+  changed_when: true
+
+- name: Restart assisted-service to pick up filtered images
+  ansible.builtin.command:
+    cmd: oc rollout restart deployment/assisted-service -n multicluster-engine
+  environment:
+    KUBECONFIG: /root/.kube/config
+  changed_when: true
+
+- name: Wait for assisted-service to be ready
+  ansible.builtin.command:
+    cmd: oc rollout status deployment/assisted-service -n multicluster-engine --timeout=120s
+  environment:
+    KUBECONFIG: /root/.kube/config
+  changed_when: false
+
 - name: Read SSH public key
   ansible.builtin.slurp:
     src: "{{ ssh_public_key_path }}"
