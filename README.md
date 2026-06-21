@@ -35,12 +35,11 @@ Internet access for OCP image pulls flows through: hgx-00 → NS VNet → softga
 
 - **Bare-metal host** running RHEL 9.x or Rocky Linux 9.x with KVM support
 - **Resources**: ~32+ CPU cores, 128+ GB RAM (lab VMs + OCP SNO VM)
-- **Netris license key** — place at repo root as `license.key`
-- **OSAC/AAP license** — place at repo root as `license.zip`
-- **OpenShift pull secret** — place at `/root/pull-secret` (or set `pull_secret_path`)
-- **SSH key pair** at `/root/.ssh/id_rsa` and `/root/.ssh/id_rsa.pub`
+- **Netris license key** — place at repo root as `license.key` (used by `make deploy`)
+- **OSAC/AAP license** — place at repo root as `license.zip` (used by `make install-osac`)
+- **OpenShift pull secret** — place at `/root/pull-secret` or set `pull_secret_path` (used by `make install-ocp` and `make discover-caas-hosts`; download from [console.redhat.com](https://console.redhat.com/openshift/downloads))
 
-All system packages (ansible, libvirt, qemu-kvm, openvpn, Go, Pulumi, OpenTofu, etc.) and OCP/OSAC tools (aicli, oc, helm, osac CLI) are installed automatically by `make setup` and the Ansible roles. A pre-flight check validates all secrets, KVM support, and minimum memory before deploying.
+All system packages (ansible, libvirt, qemu-kvm, openvpn, Go, Pulumi, OpenTofu, etc.) and OCP/OSAC tools (aicli, oc, helm, osac CLI) are installed automatically by `make setup` and the Ansible roles. A pre-flight check validates all required files (Netris license, AAP license, pull secret, SSH key), KVM support, and minimum memory before deploying.
 
 ## Quick start
 
@@ -50,6 +49,7 @@ cd netris-test-infra
 
 # Place prerequisites
 cp /path/to/license.key ./license.key
+cp /path/to/license.zip ./license.zip
 cp /path/to/pull-secret /root/pull-secret
 
 # Full VMaaS flow (setup → deploy lab → configure networking → install OCP → install OSAC)
@@ -124,8 +124,25 @@ ansible-playbook playbooks/site.yml -e ocp_version=4.21
 |----------|---------|-------------|
 | `netris_username` | `netris` | API username |
 | `netris_password` | `netris` | API password |
+| `netris_validate_certs` | `false` | Validate TLS certificates for Netris API |
 
 The controller URL is discovered dynamically by the `netris_configure` role from the running K3s service.
+
+### OSAC / Fulfillment Service
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `osac_installer_repo` | `https://github.com/osac-project/osac-installer.git` | osac-installer Git repo |
+| `osac_installer_branch` | `main` | Branch to clone |
+| `osac_namespace` | `osac` | Kubernetes namespace for OSAC |
+| `osac_kustomize_overlay` | `vmaas-ci` | Kustomize overlay directory |
+| `osac_values_file` | `values/vmaas-ci/values.yaml` | Helm values file path (relative to installer dir) |
+| `osac_license_path` | `license.zip` (repo root) | AAP license zip file path |
+| `osac_operator_image` | `""` (use installer default) | Override OSAC operator image |
+| `fulfillment_service_image` | `""` (use installer default) | Override fulfillment-service image |
+| `osac_aap_image` | `""` (use installer default) | Override AAP bootstrap image |
+| `fulfillment_service_repo` | `https://github.com/osac-project/fulfillment-service.git` | fulfillment-service Git repo (for osac CLI) |
+| `fulfillment_service_branch` | `main` | Branch to clone |
 
 ### CaaS Discovery
 
@@ -167,7 +184,7 @@ Setup and deploy are split into two phases. The `lab_setup` role (run by `setup-
 
 **`setup-lab.yml` (lab_setup role):**
 
-1. **Pre-flight checks** — validates license file, KVM support, pull secret, and minimum memory
+1. **Pre-flight checks** — validates Netris license, OSAC/AAP license, pull secret, SSH key, KVM support, and minimum memory
 2. **prerequisites** — installs system packages, Go, Pulumi, OpenTofu, configures libvirt/bridges
 3. **cache** — pre-downloads container and cloud images via skopeo
 4. **OCP/OSAC tools** — installs podman, dnsmasq, aicli, oc, helm, Go, and builds the osac CLI from fulfillment-service
