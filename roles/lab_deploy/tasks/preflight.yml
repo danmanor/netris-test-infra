@@ -19,11 +19,6 @@
     path: "{{ osac_license_path }}"
   register: _osac_license
 
-- name: Check SSH key exists
-  ansible.builtin.stat:
-    path: "{{ ssh_public_key_path }}"
-  register: _ssh_key
-
 - name: Check KVM support
   ansible.builtin.command: grep -c vmx /proc/cpuinfo
   register: _kvm_check
@@ -43,7 +38,6 @@
         + ([] if _license_file.stat.exists else ['License file not found at ' + netris_license_file + ' — obtain one from Netris and place it there'])
         + ([] if _pull_secret.stat.exists else ['Pull secret not found at ' + pull_secret_path + ' — download from console.redhat.com/openshift/downloads'])
         + ([] if _osac_license.stat.exists else ['OSAC/AAP license not found at ' + osac_license_path])
-        + ([] if _ssh_key.stat.exists else ['SSH public key not found at ' + ssh_public_key_path])
         + ([] if (_kvm_check.stdout | default('0') | int > 0) else ['KVM (vmx) not available — nested virtualization or bare metal required'])
         + ([] if (_mem_total_gb | float >= 16.0) else ['Insufficient memory: ' + _mem_total_gb + 'GB available, 16GB minimum required'])
       }}
