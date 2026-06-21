@@ -214,15 +214,6 @@
     mode: "0600"
   no_log: true
 
-- name: Check if OSAC is already deployed
-  ansible.builtin.shell:
-    cmd: oc get deployment -n {{ osac_namespace }} --no-headers 2>/dev/null | wc -l
-  environment:
-    KUBECONFIG: /root/.kube/config
-  register: _osac_deployed
-  changed_when: false
-  failed_when: false
-
 - name: Run OSAC setup.sh
   ansible.builtin.command:
     cmd: ./scripts/setup.sh
@@ -259,7 +250,6 @@
     SERVER_SSH_USER: root
     SERVER_MGMT_ROUTE_DESTINATION: "192.168.16.0/20"
     SERVER_MGMT_ROUTE_GATEWAY: "192.168.16.1"
-  when: _osac_deployed.stdout | default('0') | int == 0
   changed_when: true
   timeout: 3600
 
