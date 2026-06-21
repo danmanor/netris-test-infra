@@ -307,14 +307,11 @@
 
 - name: Start discovery VMs
   ansible.builtin.command:
-    cmd: virsh start {{ item.item }}
-  when: item.stdout | trim != 'running'
-  loop: "{{ _vm_states.results }}"
-  loop_control:
-    label: "{{ item.item }}"
+    cmd: virsh start {{ item }}
+  loop: "{{ caas_discovery_vms }}"
   register: _vm_start
-  failed_when: _vm_start.rc is defined and _vm_start.rc != 0
-  changed_when: true
+  failed_when: _vm_start.rc != 0 and 'already active' not in _vm_start.stderr
+  changed_when: _vm_start.rc == 0
 
 - name: Report CaaS discovery hosts started
   ansible.builtin.debug:
