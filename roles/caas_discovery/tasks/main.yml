@@ -1,5 +1,4 @@
 ---
----
 - name: Scale down MCE operators to prevent OS_IMAGES overwrites
   ansible.builtin.command:
     cmd: oc scale deployment {{ item }} -n multicluster-engine --replicas=0
