@@ -88,6 +88,21 @@
     state: directory
     mode: "0755"
 
+- name: Create placeholder secrets for bmf-operator
+  ansible.builtin.shell:
+    cmd: >
+      oc create secret generic {{ item }}
+      --from-literal=placeholder=unused
+      -n {{ osac_namespace }}
+      --dry-run=client -o yaml | oc apply -f -
+  environment:
+    KUBECONFIG: /root/.kube/config
+  loop:
+    - osac-management-config
+    - osac-os-clouds
+    - osac-inventory-config
+  changed_when: false
+
 - name: Copy AAP license file to overlay
   ansible.builtin.copy:
     src: "{{ osac_license_path }}"
