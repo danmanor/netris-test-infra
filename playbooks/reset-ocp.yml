@@ -67,4 +67,4 @@
 
     - name: Report reset complete
       ansible.builtin.debug:
-        msg: "OCP reset complete. VM {{ ocp_vm_name | default('unknown') }} booted with fresh disk. Run 'make install-ocp' to reinstall."
+        msg: "OCP reset complete. VM {{ ocp_vm_name | default('unknown') }} booted with fresh disk. Run 'make deploy-ocp' to reinstall."

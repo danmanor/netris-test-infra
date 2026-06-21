@@ -53,51 +53,53 @@ cp /path/to/license.zip ./license.zip
 cp /path/to/pull-secret /root/pull-secret
 
 # Full deployment (setup → lab → OCP → OSAC)
-make deploy-osac
+make deploy
 
 # Then run a test flow
-make caas          # CaaS: discover agents + create cluster
+make deploy-caas   # CaaS: discover agents + create cluster
 ```
 
-After `make install-ocp`, the kubeconfig is at `/root/.kube/config`.
+After `make deploy-ocp`, the kubeconfig is at `/root/.kube/config`.
 
 ## Make Targets
 
-### Deployment
+### Deploy
 
 | Target | Description | Time |
 |--------|-------------|------|
-| `make deploy-osac` | Full pipeline: setup → deploy → setup-ocp → install-ocp → install-osac | ~2-3 hrs |
+| `make deploy` | Full pipeline: setup → deploy-lab → deploy-ocp → deploy-osac | ~2-3 hrs |
 | `make setup` | Install prerequisites, cache images, build OCP/OSAC tools | ~10 min |
-| `make deploy` | Deploy netris-lab (K3s, topology, VMs, connectivity) | ~30 min |
-| `make setup-ocp` | Resize OCP VM + create VPC/VNet/Subnet/NAT in Netris | ~5 min |
-| `make install-ocp` | Deploy Assisted Service + install OCP SNO | ~30-60 min |
-| `make install-osac` | Prepare OSAC overlay + run setup.sh (live output) | ~30-60 min |
+| `make deploy-lab` | Deploy netris-lab (K3s, topology, VMs, connectivity) | ~30 min |
+| `make deploy-ocp` | Resize OCP VM + Netris networking + Assisted Service + OCP SNO | ~35-65 min |
+| `make deploy-osac` | Prepare OSAC overlay + run setup.sh (live output) | ~30-60 min |
 
-### Test Flows (run after deploy-osac)
+### Per-flow (run after deploy)
 
 | Target | Description | Time |
 |--------|-------------|------|
-| `make caas` | CaaS flow: discover-caas-hosts + setup-caas | ~75 min |
+| `make deploy-caas` | CaaS flow: discover-caas-hosts + setup-caas | ~75 min |
 | `make discover-caas-hosts` | Boot hgx-01..03 with discovery ISO | ~15 min |
 | `make setup-caas` | Label agents, create host type + cluster | ~60 min |
-| `make vmaas` | VMaaS flow (not yet implemented) | — |
-| `make bmaas` | BMaaS flow (not yet implemented) | — |
+| `make deploy-vmaas` | VMaaS flow (not yet implemented) | — |
+| `make deploy-bmaas` | BMaaS flow (not yet implemented) | — |
 
-### Recovery and Re-run
+### Destroy
+
+| Target | Description |
+|--------|-------------|
+| `make destroy` | Tear down everything: OSAC + OCP artifacts + netris-lab |
+| `make destroy-osac` | Tear down OSAC: helm releases, operators, CRDs, namespaces (live output) |
+| `make destroy-ocp` | Reset OCP for reinstall: delete cluster, recreate disk, boot VM |
+| `make destroy-caas` | CaaS teardown (not yet implemented) |
+| `make destroy-vmaas` | VMaaS teardown (not yet implemented) |
+| `make destroy-bmaas` | BMaaS teardown (not yet implemented) |
+
+### Recovery and Utilities
 
 | Target | Description |
 |--------|-------------|
 | `make connectivity` | Re-run lab connectivity (VPN, BGP, softgates) without full redeploy |
 | `make run-osac-setup` | Re-run just setup.sh with live output (after prep-osac has run) |
-| `make reset-ocp` | Reset OCP for reinstall: delete cluster, recreate disk, boot VM |
-| `make destroy-osac` | Tear down OSAC: helm releases, operators, CRDs, namespaces (live output) |
-| `make destroy` | Tear down everything: OSAC + OCP artifacts + netris-lab |
-
-### Utilities
-
-| Target | Description |
-|--------|-------------|
 | `make prep-osac` | Ansible-only OSAC prep (clone, overlay, secrets, env file) — no setup.sh |
 | `make vendor-update` | Refresh vendored Ansible collections |
 | `make lint` | Run ansible-lint |
@@ -106,19 +108,19 @@ After `make install-ocp`, the kubeconfig is at `/root/.kube/config`.
 
 **First deploy on a fresh server:**
 ```bash
-make deploy-osac    # does everything
+make deploy         # does everything
 ```
 
 **Re-deploy OSAC after code changes:**
 ```bash
 make destroy-osac   # tear down OSAC (keeps OCP and lab)
-make install-osac   # redeploy
+make deploy-osac    # redeploy
 ```
 
 **Re-install OCP (e.g., different version):**
 ```bash
-make reset-ocp      # delete cluster, recreate disk
-make install-ocp    # reinstall
+make destroy-ocp    # delete cluster, recreate disk
+make deploy-ocp     # reinstall
 ```
 
 **Fix lab connectivity issues (e.g., softgate/E-BGP):**
@@ -129,12 +131,12 @@ make connectivity   # re-runs VPN, socat, ISP FRR, softgate agents
 **Rebuild from scratch:**
 ```bash
 make destroy        # tear down everything
-make deploy-osac    # full redeploy
+make deploy         # full redeploy
 ```
 
-## How install-osac Works
+## How deploy-osac Works
 
-`make install-osac` runs in two phases for live terminal output:
+`make deploy-osac` runs in two phases for live terminal output:
 
 1. **`prep-osac`** (Ansible) — clones osac-installer, copies the development overlay to a working overlay (`osac-devel`), writes secrets (license, pull secret, SSH keys), configures env files with Netris integration settings, and disables unused components (bmf-operator).
 
@@ -145,8 +147,8 @@ make deploy-osac    # full redeploy
 All parameters are in [`inventory/group_vars/all.yml`](inventory/group_vars/all.yml). Override any variable via `EXTRA_VARS`:
 
 ```bash
-make install-ocp EXTRA_VARS="ocp_version=4.21"
-make install-osac EXTRA_VARS='{"osac_installer_branch": "feature-x"}'
+make deploy-ocp EXTRA_VARS="ocp_version=4.21"
+make deploy-osac EXTRA_VARS='{"osac_installer_branch": "feature-x"}'
 ```
 
 ### Key Variables
