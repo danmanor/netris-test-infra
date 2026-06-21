@@ -54,6 +54,18 @@
     regexp: '^\s*-\s*\.\./_shared/console-proxy-shared-dev\s*$'
     replace: ''
 
+- name: Fix console-proxy deployment name for helm mode
+  ansible.builtin.replace:
+    path: "{{ osac_installer_dir }}/scripts/setup.sh"
+    regexp: 'wait_for_resource deployment/osac-console-proxy'
+    replace: |-
+      if [[ "${DEPLOY_MODE}" == "helm" ]]; then
+        CONSOLE_PROXY_DEPLOY="fulfillment-console-proxy"
+      else
+        CONSOLE_PROXY_DEPLOY="osac-console-proxy"
+      fi
+      wait_for_resource deployment/${CONSOLE_PROXY_DEPLOY}
+
 - name: Disable bare-metal fulfillment operator
   ansible.builtin.blockinfile:
     path: "{{ osac_installer_dir }}/{{ osac_values_file }}"
