@@ -45,6 +45,9 @@ vmaas:
 bmaas:
 	@echo "BMaaS flow is not yet implemented"
 
+reset-ocp:
+	ansible-playbook playbooks/reset-ocp.yml $(ANSIBLE_EXTRA)
+
 destroy-osac:
 	@echo "=== Tearing down OSAC ==="
 	cd /opt/osac-installer && source /tmp/osac-setup.env && \
