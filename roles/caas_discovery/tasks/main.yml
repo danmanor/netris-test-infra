@@ -108,6 +108,10 @@
 
         # Restart dnsmasq
         systemctl restart dnsmasq
+
+        # Point DHCP DNS to local dnsmasq so agents resolve OCP routes
+        sed -i 's/option domain-name-servers .*/option domain-name-servers 192.168.16.1, 8.8.8.8;/' /etc/dhcp/dhcpd.conf
+        systemctl restart isc-dhcp-server
       "
   changed_when: true
 
