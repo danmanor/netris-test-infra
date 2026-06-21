@@ -1,9 +1,20 @@
 ---
+---
+- name: Scale down MCE operators to prevent OS_IMAGES overwrites
+  ansible.builtin.command:
+    cmd: oc scale deployment {{ item }} -n multicluster-engine --replicas=0
+  environment:
+    KUBECONFIG: /root/.kube/config
+  loop:
+    - infrastructure-operator
+    - multicluster-engine-operator
+  failed_when: false
+  changed_when: false
+
 - name: Check if OS_IMAGES is already filtered
   ansible.builtin.shell:
     cmd: |
-      count=$(oc get configmap assisted-service -n multicluster-engine -o jsonpath='{.data.OS_IMAGES}' | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')
-      echo $count
+      oc get configmap assisted-service -n multicluster-engine -o jsonpath='{.data.OS_IMAGES}' | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))'
   environment:
     KUBECONFIG: /root/.kube/config
   register: _os_images_count
@@ -13,16 +24,6 @@
 - name: Filter MCE OS_IMAGES to target version
   when: _os_images_count.stdout | default('0') | int > 1
   block:
-    - name: Scale down MCE operators to prevent overwrites
-      ansible.builtin.command:
-        cmd: oc scale deployment {{ item }} -n multicluster-engine --replicas=0
-      environment:
-        KUBECONFIG: /root/.kube/config
-      loop:
-        - infrastructure-operator
-        - multicluster-engine-operator
-      failed_when: false
-      changed_when: true
 
     - name: Filter OS_IMAGES and patch assisted-service ConfigMap and StatefulSet
       ansible.builtin.script:
