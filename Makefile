@@ -1,33 +1,46 @@
-.PHONY: all setup deploy connectivity ocp-setup install-ocp install-osac discover-caas-hosts setup-caas destroy vendor-update lint
+.PHONY: deploy-osac setup deploy connectivity setup-ocp install-ocp install-osac caas discover-caas-hosts setup-caas vmaas bmaas destroy vendor-update lint
 
-all: setup deploy ocp-setup install-ocp install-osac
+EXTRA_VARS ?=
+ANSIBLE_EXTRA = $(if $(EXTRA_VARS),-e '$(EXTRA_VARS)')
+
+# Shared targets — deploy OSAC on OCP (used by all flows)
+deploy-osac: setup deploy setup-ocp install-ocp install-osac
 
 setup:
-	ansible-playbook playbooks/setup-lab.yml
+	ansible-playbook playbooks/setup-lab.yml $(ANSIBLE_EXTRA)
 
 deploy:
-	ansible-playbook playbooks/deploy-lab.yml
+	ansible-playbook playbooks/deploy-lab.yml $(ANSIBLE_EXTRA)
 
 connectivity:
-	ansible-playbook playbooks/connectivity-lab.yml
+	ansible-playbook playbooks/connectivity-lab.yml $(ANSIBLE_EXTRA)
 
-ocp-setup:
-	ansible-playbook playbooks/configure-ocp.yml
+setup-ocp:
+	ansible-playbook playbooks/setup-ocp.yml $(ANSIBLE_EXTRA)
 
 install-ocp:
-	ansible-playbook playbooks/install-ocp.yml
+	ansible-playbook playbooks/install-ocp.yml $(ANSIBLE_EXTRA)
 
 install-osac:
-	ansible-playbook playbooks/install-osac.yml
+	ansible-playbook playbooks/install-osac.yml $(ANSIBLE_EXTRA)
+
+# Per-flow targets — run after deploy-osac
+caas: discover-caas-hosts setup-caas
 
 discover-caas-hosts:
-	ansible-playbook playbooks/discover-caas-hosts.yml
+	ansible-playbook playbooks/discover-caas-hosts.yml $(ANSIBLE_EXTRA)
 
 setup-caas:
-	ansible-playbook playbooks/setup-caas.yml
+	ansible-playbook playbooks/setup-caas.yml $(ANSIBLE_EXTRA)
+
+vmaas:
+	@echo "VMaaS flow is not yet implemented"
+
+bmaas:
+	@echo "BMaaS flow is not yet implemented"
 
 destroy:
-	ansible-playbook playbooks/destroy.yml
+	ansible-playbook playbooks/destroy.yml $(ANSIBLE_EXTRA)
 
 vendor-update:
 	rm -rf vendor/ansible_collections

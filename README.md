@@ -52,22 +52,20 @@ cp /path/to/license.key ./license.key
 cp /path/to/license.zip ./license.zip
 cp /path/to/pull-secret /root/pull-secret
 
-# Full VMaaS flow (setup → deploy lab → configure networking → install OCP → install OSAC)
-make all
+# Deploy OSAC on OCP (shared across all flows)
+make deploy-osac   # setup → deploy → setup-ocp → install-ocp → install-osac
 
 # Or step by step
-make setup         # Install prerequisites + cache images + OCP/OSAC tools (~20 min)
-make deploy        # Deploy netris-lab (~45-90 min)
-make ocp-setup     # Resize VM + create VPC/VNet/Subnet (~10 min)
+make setup         # Install prerequisites + cache images + OCP/OSAC tools (~10 min)
+make deploy        # Deploy netris-lab (~30 min)
+make setup-ocp     # Resize VM + create VPC/VNet/Subnet (~5 min)
 make install-ocp   # Install OCP SNO via Assisted Installer (~30-60 min)
-make install-osac  # Install OSAC on OCP (~30 min)
+make install-osac  # Install OSAC on OCP (~30-60 min)
 
-# Re-run connectivity (VPN, BGP, softgate agents) without full redeploy
-make connectivity
-
-# CaaS additional steps (after make all)
-make discover-caas-hosts  # Create InfraEnv, boot hgx1-3 with discovery ISO (~15 min)
-make setup-caas           # Annotate agents, create host type + cluster, wait for ready (~60 min)
+# Per-flow targets (run after deploy-osac)
+make caas          # CaaS flow: discover agents + setup cluster (~75 min)
+make vmaas         # VMaaS flow (not yet implemented)
+make bmaas         # BMaaS flow (not yet implemented)
 
 # Teardown
 make destroy
@@ -79,13 +77,32 @@ After `make deploy`, the Netris controller UI is available at `https://<hypervis
 
 ## Configuration
 
-All parameters are in [`inventory/group_vars/all.yml`](inventory/group_vars/all.yml). Override with `-e`:
+All parameters are in [`inventory/group_vars/all.yml`](inventory/group_vars/all.yml). Override any variable via `EXTRA_VARS` when running make targets:
 
 ```bash
-ansible-playbook playbooks/site.yml -e ocp_version=4.21
+# Single variable
+make install-ocp EXTRA_VARS="ocp_version=4.21"
+
+# Multiple variables (JSON format)
+make install-osac EXTRA_VARS='{"osac_installer_branch": "feature-x", "osac_operator_image": "quay.io/my/operator:dev"}'
+
+# Works with compound targets too
+make deploy-osac EXTRA_VARS="ocp_version=4.21"
 ```
 
-### OCP Server VM
+`EXTRA_VARS` is passed as `-e` to every `ansible-playbook` call and takes highest precedence over `group_vars/all.yml` defaults.
+
+### `setup` — lab prerequisites
+
+No target-specific variables. Installs system packages, caches images, and builds OCP/OSAC tools.
+
+### `deploy` — deploy netris-lab
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ew_fabric_enable` | `0` | East-West fabric (0=disabled) |
+
+### `setup-ocp` — resize OCP VM + configure Netris networking
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -94,8 +111,20 @@ ansible-playbook playbooks/site.yml -e ocp_version=4.21
 | `ocp_server_memory_gb` | `64` | RAM in GB |
 | `ocp_install_disk_gb` | `100` | Installation disk size in GB |
 | `ocp_lvm_disk_gb` | `200` | Extra LVM storage disk in GB |
+| `ocp_vpc_name` | `ocp-sno` | VPC name in Netris |
+| `ocp_vnet_name` | `ocp-sno-vnet` | VNet name in Netris |
+| `ocp_subnet_cidr` | `192.168.40.0/24` | Subnet CIDR for OCP server |
+| `ocp_gateway` | `192.168.40.1/24` | VNet gateway |
+| `ocp_node_ip` | `192.168.40.2` | Expected OCP node IP (used for DNS) |
+| `ocp_snat_ip` | `198.51.100.1` | SNAT IP for outbound internet access |
+| `ocp_dnat_ip` | `198.51.100.2` | DNAT IP for inbound access to OCP API/apps |
+| `netris_username` | `netris` | Netris API username |
+| `netris_password` | `netris` | Netris API password |
+| `netris_validate_certs` | `false` | Validate TLS certificates for Netris API |
 
-### OCP Installation
+The controller URL is discovered dynamically from the running K3s service.
+
+### `install-ocp` — deploy Assisted Service + install OCP SNO
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -107,30 +136,7 @@ ansible-playbook playbooks/site.yml -e ocp_version=4.21
 | `assisted_service_url` | `http://localhost:8090` | Assisted Installer service URL |
 | `assisted_service_ip` | `198.51.100.9` | IP address for Assisted Service access |
 
-### Netris Networking
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ocp_vpc_name` | `ocp-sno` | VPC name in Netris |
-| `ocp_vnet_name` | `ocp-sno-vnet` | VNet name in Netris |
-| `ocp_subnet_cidr` | `192.168.40.0/24` | Subnet CIDR for OCP server |
-| `ocp_gateway` | `192.168.40.1/24` | VNet gateway |
-| `ocp_node_ip` | `192.168.40.2` | Expected OCP node IP (used for DNS) |
-| `ocp_snat_ip` | `198.51.100.1` | SNAT IP for outbound internet access |
-| `ocp_dnat_ip` | `198.51.100.2` | DNAT IP for inbound access to OCP API/apps |
-| `ew_fabric_enable` | `0` | East-West fabric (0=disabled) |
-
-### Netris Controller
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `netris_username` | `netris` | API username |
-| `netris_password` | `netris` | API password |
-| `netris_validate_certs` | `false` | Validate TLS certificates for Netris API |
-
-The controller URL is discovered dynamically by the `netris_configure` role from the running K3s service.
-
-### OSAC / Fulfillment Service
+### `install-osac` — deploy OSAC + fulfillment-service
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -146,7 +152,9 @@ The controller URL is discovered dynamically by the `netris_configure` role from
 | `fulfillment_service_repo` | `https://github.com/osac-project/fulfillment-service.git` | fulfillment-service Git repo (for osac CLI) |
 | `fulfillment_service_branch` | `main` | Branch to clone |
 
-### CaaS Discovery
+### `caas` — CaaS flow (discover-caas-hosts + setup-caas)
+
+#### discover-caas-hosts
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -156,7 +164,7 @@ The controller URL is discovered dynamically by the `netris_configure` role from
 | `caas_discovery_disk_gb` | `100` | Boot disk size in GB |
 | `caas_discovery_infraenv_name` | `caas-infraenv` | InfraEnv CR name |
 
-### CaaS Setup
+#### setup-caas
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -165,6 +173,10 @@ The controller URL is discovered dynamically by the `netris_configure` role from
 | `caas_cluster_name` | `caas-ci-cluster` | Name for the created cluster |
 | `caas_agents` | `[{vm_pattern, netris_server_name}]` | Agent-to-Netris-server mapping |
 
+### `vmaas` / `bmaas`
+
+Not yet implemented.
+
 ## Playbooks
 
 | Playbook | Roles | Purpose |
@@ -172,7 +184,7 @@ The controller URL is discovered dynamically by the `netris_configure` role from
 | `setup-lab.yml` | `lab_setup` | Install prerequisites, cache images, install OCP/OSAC tools |
 | `deploy-lab.yml` | `lab_deploy` | Deploy netris-lab (K3s → topology → cloudsim → connectivity → verify) |
 | `connectivity-lab.yml` | (inline) `connectivity` | Re-run lab connectivity (VPN, BGP, softgate agents) |
-| `configure-ocp.yml` | `vm_resize`, `netris_configure` | Resize hgx-00 VM + create VPC/VNet/Subnet |
+| `setup-ocp.yml` | `vm_resize`, `netris_configure` | Resize hgx-00 VM + create VPC/VNet/Subnet |
 | `install-ocp.yml` | `assisted_service`, `ocp_install` | Start Assisted Service, install OCP SNO |
 | `install-osac.yml` | `osac_install` | Install OSAC on OCP SNO |
 | `discover-caas-hosts.yml` | `caas_discovery` | Create InfraEnv, boot hgx1-3 with discovery ISO |

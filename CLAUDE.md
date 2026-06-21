@@ -29,24 +29,32 @@ vendor/                         # Vendored Ansible collections
 ## Commands
 
 ```
-make all                    # setup + deploy + ocp-setup + install-ocp + install-osac
+make deploy-osac            # Shared: setup + deploy + setup-ocp + install-ocp + install-osac
 make setup                  # Install prerequisites, cache images, install OCP/OSAC tools
 make deploy                 # Deploy netris-lab
 make connectivity           # Re-run lab connectivity (VPN, BGP, softgate agents)
-make ocp-setup              # Resize OCP VM + configure Netris networking
+make setup-ocp              # Resize OCP VM + configure Netris networking
 make install-ocp            # Deploy Assisted Service + install OCP SNO
 make install-osac           # Deploy OSAC + fulfillment-service
+make caas                   # CaaS flow: discover-caas-hosts + setup-caas
 make discover-caas-hosts    # Boot hgx-01..03 with discovery ISO
 make setup-caas             # Label agents + create CaaS cluster
+make vmaas                  # VMaaS flow (not yet implemented)
+make bmaas                  # BMaaS flow (not yet implemented)
 make destroy                # Teardown all infrastructure
 make vendor-update          # Refresh vendored Ansible collections
+# Override variables: make <target> EXTRA_VARS="key=value"
 ```
 
 ## Workflow Order
 
-**VMaaS (full):** setup → deploy → ocp-setup → install-ocp → install-osac
+**Shared (all flows):** deploy-osac (setup → deploy → setup-ocp → install-ocp → install-osac)
 
-**CaaS (after VMaaS):** discover-caas-hosts → setup-caas
+**CaaS:** deploy-osac → caas (discover-caas-hosts → setup-caas)
+
+**VMaaS:** deploy-osac → vmaas (not yet implemented)
+
+**BMaaS:** deploy-osac → bmaas (not yet implemented)
 
 ## Ansible Configuration
 
