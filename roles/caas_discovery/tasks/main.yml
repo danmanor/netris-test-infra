@@ -1,24 +1,43 @@
 ---
-- name: Scale down infrastructure-operator
+- name: Scale down MCE operators to prevent overwrites
   ansible.builtin.command:
-    cmd: oc scale deployment infrastructure-operator -n multicluster-engine --replicas=0
+    cmd: oc scale deployment {{ item }} -n multicluster-engine --replicas=0
   environment:
     KUBECONFIG: /root/.kube/config
+  loop:
+    - infrastructure-operator
+    - multicluster-engine-operator
   changed_when: true
   failed_when: false
 
-- name: Filter OS_IMAGES to target version and architecture
-  ansible.builtin.shell:
-    cmd: |
-      OS_IMAGES=$(oc get configmap assisted-service -n multicluster-engine -o jsonpath='{.data.OS_IMAGES}')
-      FILTERED=$(echo "$OS_IMAGES" | python3 -c "
-      import json, sys
-      imgs = json.load(sys.stdin)
-      filtered = [i for i in imgs if i['openshift_version'] == '{{ caas_ocp_version }}' and i['cpu_architecture'] == 'x86_64']
-      print(json.dumps(filtered))
-      ")
-      oc patch configmap assisted-service -n multicluster-engine --type=merge \
-        -p "{\"data\":{\"OS_IMAGES\":$(echo "$FILTERED" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')}}"
+- name: Filter OS_IMAGES and patch assisted-service ConfigMap and StatefulSet
+  ansible.builtin.script:
+    cmd: /usr/bin/python3 -
+    stdin: |
+      import json, subprocess
+
+      def run(cmd):
+          r = subprocess.run(cmd, capture_output=True, text=True, check=True)
+          return r.stdout
+
+      # Filter OS_IMAGES in ConfigMap
+      os_images = json.loads(run(["oc", "get", "configmap", "assisted-service", "-n", "multicluster-engine", "-o", "jsonpath={.data.OS_IMAGES}"]))
+      filtered = [i for i in os_images if i["openshift_version"] == "{{ caas_ocp_version }}" and i["cpu_architecture"] == "x86_64"]
+      filtered_json = json.dumps(filtered)
+      print(f"Filtered OS_IMAGES from {len(os_images)} to {len(filtered)}")
+
+      # Patch ConfigMap
+      patch = json.dumps({"data": {"OS_IMAGES": filtered_json}})
+      run(["oc", "patch", "configmap", "assisted-service", "-n", "multicluster-engine", "--type=merge", "-p", patch])
+
+      # Patch StatefulSet RHCOS_VERSIONS
+      ss = json.loads(run(["oc", "get", "statefulset", "assisted-image-service", "-n", "multicluster-engine", "-o", "json"]))
+      idx = next(i for i, e in enumerate(ss["spec"]["template"]["spec"]["containers"][0]["env"]) if e["name"] == "RHCOS_VERSIONS")
+      ss_patch = json.dumps([{"op": "replace", "path": f"/spec/template/spec/containers/0/env/{idx}/value", "value": filtered_json}])
+      with open("/tmp/patch.json", "w") as f:
+          f.write(ss_patch)
+      run(["oc", "patch", "statefulset", "assisted-image-service", "-n", "multicluster-engine", "--type=json", "--patch-file=/tmp/patch.json"])
+      print("Patched ConfigMap and StatefulSet")
   environment:
     KUBECONFIG: /root/.kube/config
   changed_when: true
@@ -30,9 +49,16 @@
     KUBECONFIG: /root/.kube/config
   changed_when: true
 
-- name: Wait for assisted-service to be ready
+- name: Wait for assisted-service rollout
   ansible.builtin.command:
     cmd: oc rollout status deployment/assisted-service -n multicluster-engine --timeout=120s
+  environment:
+    KUBECONFIG: /root/.kube/config
+  changed_when: false
+
+- name: Wait for assisted-image-service rollout
+  ansible.builtin.command:
+    cmd: oc rollout status statefulset/assisted-image-service -n multicluster-engine --timeout=300s
   environment:
     KUBECONFIG: /root/.kube/config
   changed_when: false
