@@ -214,9 +214,9 @@
     mode: "0600"
   no_log: true
 
-- name: Run OSAC setup.sh (tail -f /tmp/osac-setup.log for live output)
+- name: Run OSAC setup.sh (async)
   ansible.builtin.shell:
-    cmd: ./scripts/setup.sh 2>&1 | tee /tmp/osac-setup.log
+    cmd: ./scripts/setup.sh > /tmp/osac-setup.log 2>&1
     chdir: "{{ osac_installer_dir }}"
   environment:
     KUBECONFIG: /root/.kube/config
@@ -250,8 +250,14 @@
     SERVER_SSH_USER: root
     SERVER_MGMT_ROUTE_DESTINATION: "192.168.16.0/20"
     SERVER_MGMT_ROUTE_GATEWAY: "192.168.16.1"
+  register: _setup_result
   changed_when: true
   timeout: 3600
+
+- name: Show setup.sh output
+  ansible.builtin.debug:
+    msg: "{{ _setup_result.stdout_lines }}"
+  when: _setup_result.stdout_lines is defined
 
 - name: Report OSAC installation complete
   ansible.builtin.debug:
