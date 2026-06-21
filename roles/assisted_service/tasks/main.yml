@@ -33,6 +33,7 @@
 - name: Deploy local Assisted Service
   ansible.builtin.command:
     cmd: aicli create onprem -P onprem_ip={{ assisted_service_ip }}
+    chdir: /root
   when: _ai_check.rc != 0
   changed_when: true
 
