@@ -103,7 +103,10 @@
       address=/.apps.{{ ocp_cluster_name }}.{{ ocp_base_domain }}/{{ ocp_dnat_ip }}
       DNSEOF
 
-        # Set resolv.conf to use local dnsmasq + upstream
+        # Set upstream DNS for dnsmasq forwarding
+        echo 'nameserver 8.8.8.8' > /run/dnsmasq/resolv.conf
+
+        # Set resolv.conf to use local dnsmasq
         echo -e 'nameserver 127.0.0.1\nnameserver 8.8.8.8' > /etc/resolv.conf
 
         # Restart dnsmasq
