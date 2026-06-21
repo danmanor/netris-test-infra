@@ -43,9 +43,5 @@
   failed_when: false
 
 - name: Destroy netris-lab
-  ansible.builtin.command:
-    cmd: make destroy
-    chdir: "{{ netris_lab_dir }}"
-  register: _lab_destroy
-  failed_when: false
-  changed_when: _lab_destroy.rc == 0
+  ansible.builtin.include_role:
+    name: lab_destroy
