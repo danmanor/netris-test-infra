@@ -71,7 +71,7 @@ caas_agent_namespace: "{{ caas_discovery_infraenv_namespace }}"
 caas_host_type_id: "ci-worker"
 caas_host_type_title: "CI Worker"
 caas_host_type_description: "Worker nodes for CI testing"
-caas_cluster_template: "ocp_ci_small"
+caas_cluster_template: "osac.templates.ocp_ci_small"
 caas_cluster_name: "caas-ci-cluster"
 caas_agents:
   - vm_pattern: "hgx-pod00-su0-h01"
