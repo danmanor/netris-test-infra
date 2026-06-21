@@ -35,13 +35,13 @@ Internet access for OCP image pulls flows through: hgx-00 → NS VNet → softga
 
 - **Bare-metal host** running RHEL 9.x or Rocky Linux 9.x with KVM support
 - **Resources**: ~32+ CPU cores, 128+ GB RAM (lab VMs + OCP SNO VM)
-- **Netris license key** — place at repo root as `license.key` (used by `make deploy`)
-- **OSAC/AAP license** — place at repo root as `license.zip` (used by `make install-osac`)
-- **OpenShift pull secret** — place at `/root/pull-secret` or set `pull_secret_path` (used by `make install-ocp` and `make discover-caas-hosts`; download from [console.redhat.com](https://console.redhat.com/openshift/downloads))
+- **Netris license key** — place at repo root as `license.key`
+- **OSAC/AAP license** — place at repo root as `license.zip`
+- **OpenShift pull secret** — place at `/root/pull-secret` (or set `pull_secret_path`; download from [console.redhat.com](https://console.redhat.com/openshift/downloads))
 
-All system packages (ansible, libvirt, qemu-kvm, openvpn, Go, Pulumi, OpenTofu, etc.) and OCP/OSAC tools (aicli, oc, helm, osac CLI) are installed automatically by `make setup` and the Ansible roles. A pre-flight check validates all required files (Netris license, AAP license, pull secret, SSH key), KVM support, and minimum memory before deploying.
+All system packages and tools are installed automatically by `make setup`. A pre-flight check validates all required files, KVM support, and minimum memory before deploying.
 
-## Quick start
+## Quick Start
 
 ```bash
 git clone --recurse-submodules https://github.com/danmanor/netris-test-infra.git
@@ -52,165 +52,123 @@ cp /path/to/license.key ./license.key
 cp /path/to/license.zip ./license.zip
 cp /path/to/pull-secret /root/pull-secret
 
-# Deploy OSAC on OCP (shared across all flows)
-make deploy-osac   # setup → deploy → setup-ocp → install-ocp → install-osac
+# Full deployment (setup → lab → OCP → OSAC)
+make deploy-osac
 
-# Or step by step
-make setup         # Install prerequisites + cache images + OCP/OSAC tools (~10 min)
-make deploy        # Deploy netris-lab (~30 min)
-make setup-ocp     # Resize VM + create VPC/VNet/Subnet (~5 min)
-make install-ocp   # Install OCP SNO via Assisted Installer (~30-60 min)
-make install-osac  # Install OSAC on OCP (~30-60 min)
-
-# Per-flow targets (run after deploy-osac)
-make caas          # CaaS flow: discover agents + setup cluster (~75 min)
-make vmaas         # VMaaS flow (not yet implemented)
-make bmaas         # BMaaS flow (not yet implemented)
-
-# Teardown
-make destroy
+# Then run a test flow
+make caas          # CaaS: discover agents + create cluster
 ```
 
 After `make install-ocp`, the kubeconfig is at `/root/.kube/config`.
 
-After `make deploy`, the Netris controller UI is available at `https://<hypervisor>:9443`. After `make install-ocp`, the Assisted Installer UI is available at `http://<hypervisor>:8080`.
+## Make Targets
+
+### Deployment
+
+| Target | Description | Time |
+|--------|-------------|------|
+| `make deploy-osac` | Full pipeline: setup → deploy → setup-ocp → install-ocp → install-osac | ~2-3 hrs |
+| `make setup` | Install prerequisites, cache images, build OCP/OSAC tools | ~10 min |
+| `make deploy` | Deploy netris-lab (K3s, topology, VMs, connectivity) | ~30 min |
+| `make setup-ocp` | Resize OCP VM + create VPC/VNet/Subnet/NAT in Netris | ~5 min |
+| `make install-ocp` | Deploy Assisted Service + install OCP SNO | ~30-60 min |
+| `make install-osac` | Prepare OSAC overlay + run setup.sh (live output) | ~30-60 min |
+
+### Test Flows (run after deploy-osac)
+
+| Target | Description | Time |
+|--------|-------------|------|
+| `make caas` | CaaS flow: discover-caas-hosts + setup-caas | ~75 min |
+| `make discover-caas-hosts` | Boot hgx-01..03 with discovery ISO | ~15 min |
+| `make setup-caas` | Label agents, create host type + cluster | ~60 min |
+| `make vmaas` | VMaaS flow (not yet implemented) | — |
+| `make bmaas` | BMaaS flow (not yet implemented) | — |
+
+### Recovery and Re-run
+
+| Target | Description |
+|--------|-------------|
+| `make connectivity` | Re-run lab connectivity (VPN, BGP, softgates) without full redeploy |
+| `make run-osac-setup` | Re-run just setup.sh with live output (after prep-osac has run) |
+| `make reset-ocp` | Reset OCP for reinstall: delete cluster, recreate disk, boot VM |
+| `make destroy-osac` | Tear down OSAC: helm releases, operators, CRDs, namespaces (live output) |
+| `make destroy` | Tear down everything: OSAC + OCP artifacts + netris-lab |
+
+### Utilities
+
+| Target | Description |
+|--------|-------------|
+| `make prep-osac` | Ansible-only OSAC prep (clone, overlay, secrets, env file) — no setup.sh |
+| `make vendor-update` | Refresh vendored Ansible collections |
+| `make lint` | Run ansible-lint |
+
+### Typical Workflows
+
+**First deploy on a fresh server:**
+```bash
+make deploy-osac    # does everything
+```
+
+**Re-deploy OSAC after code changes:**
+```bash
+make destroy-osac   # tear down OSAC (keeps OCP and lab)
+make install-osac   # redeploy
+```
+
+**Re-install OCP (e.g., different version):**
+```bash
+make reset-ocp      # delete cluster, recreate disk
+make install-ocp    # reinstall
+```
+
+**Fix lab connectivity issues (e.g., softgate/E-BGP):**
+```bash
+make connectivity   # re-runs VPN, socat, ISP FRR, softgate agents
+```
+
+**Rebuild from scratch:**
+```bash
+make destroy        # tear down everything
+make deploy-osac    # full redeploy
+```
+
+## How install-osac Works
+
+`make install-osac` runs in two phases for live terminal output:
+
+1. **`prep-osac`** (Ansible) — clones osac-installer, copies the development overlay to a working overlay (`osac-devel`), writes secrets (license, pull secret, SSH keys), configures env files with Netris integration settings, and disables unused components (bmf-operator).
+
+2. **`run-osac-setup`** (shell) — runs `setup.sh` directly in the terminal with live output. This installs OCP operators (LVMS, MetalLB, CNV, cert-manager, Authorino, Keycloak, AAP), deploys OSAC via Helm, applies AAP configuration, and runs post-install setup (AAP token, hub registration, tenant creation).
 
 ## Configuration
 
-All parameters are in [`inventory/group_vars/all.yml`](inventory/group_vars/all.yml). Override any variable via `EXTRA_VARS` when running make targets:
+All parameters are in [`inventory/group_vars/all.yml`](inventory/group_vars/all.yml). Override any variable via `EXTRA_VARS`:
 
 ```bash
-# Single variable
 make install-ocp EXTRA_VARS="ocp_version=4.21"
-
-# Multiple variables (JSON format)
-make install-osac EXTRA_VARS='{"osac_installer_branch": "feature-x", "osac_operator_image": "quay.io/my/operator:dev"}'
-
-# Works with compound targets too
-make deploy-osac EXTRA_VARS="ocp_version=4.21"
+make install-osac EXTRA_VARS='{"osac_installer_branch": "feature-x"}'
 ```
 
-`EXTRA_VARS` is passed as `-e` to every `ansible-playbook` call and takes highest precedence over `group_vars/all.yml` defaults.
-
-### `setup` — lab prerequisites
-
-No target-specific variables. Installs system packages, caches images, and builds OCP/OSAC tools.
-
-### `deploy` — deploy netris-lab
+### Key Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ew_fabric_enable` | `0` | East-West fabric (0=disabled) |
-
-### `setup-ocp` — resize OCP VM + configure Netris networking
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ocp_vm_name_pattern` | `hgx-pod00-su0-h00` | VM name pattern to find in libvirt |
-| `ocp_server_vcpu` | `20` | vCPUs for OCP SNO VM |
-| `ocp_server_memory_gb` | `64` | RAM in GB |
-| `ocp_install_disk_gb` | `100` | Installation disk size in GB |
-| `ocp_lvm_disk_gb` | `200` | Extra LVM storage disk in GB |
-| `ocp_vpc_name` | `ocp-sno` | VPC name in Netris |
-| `ocp_vnet_name` | `ocp-sno-vnet` | VNet name in Netris |
-| `ocp_subnet_cidr` | `192.168.40.0/24` | Subnet CIDR for OCP server |
-| `ocp_gateway` | `192.168.40.1/24` | VNet gateway |
-| `ocp_node_ip` | `192.168.40.2` | Expected OCP node IP (used for DNS) |
-| `ocp_snat_ip` | `198.51.100.1` | SNAT IP for outbound internet access |
-| `ocp_dnat_ip` | `198.51.100.2` | DNAT IP for inbound access to OCP API/apps |
+| `ocp_version` | `4.21` | OpenShift version |
+| `ocp_cluster_name` | `ocp-sno` | OCP cluster name |
+| `ocp_base_domain` | `osac.local` | DNS base domain |
+| `ocp_server_vcpu` | `20` | OCP VM vCPUs |
+| `ocp_server_memory_gb` | `64` | OCP VM RAM (GB) |
+| `ocp_subnet_cidr` | `192.168.40.0/24` | OCP VNet subnet |
+| `ocp_dnat_ip` | `198.51.100.2` | DNAT IP for OCP API/apps access |
+| `osac_namespace` | `osac-devel` | OSAC Kubernetes namespace |
+| `osac_kustomize_overlay` | `osac-devel` | OSAC overlay (copied from development) |
+| `osac_values_file` | `values/development/values.yaml` | Helm values file |
+| `osac_installer_branch` | `main` | osac-installer branch |
 | `netris_username` | `netris` | Netris API username |
 | `netris_password` | `netris` | Netris API password |
-| `netris_validate_certs` | `false` | Validate TLS certificates for Netris API |
+| `ew_fabric_enable` | `0` | East-West fabric (0=NS only) |
 
-The controller URL is discovered dynamically from the running K3s service.
-
-### `install-ocp` — deploy Assisted Service + install OCP SNO
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ocp_version` | `4.21` | OpenShift version to install |
-| `ocp_cluster_name` | `ocp-sno` | Cluster name |
-| `ocp_base_domain` | `osac.local` | Base DNS domain (resolved via local dnsmasq) |
-| `pull_secret_path` | `/root/pull-secret` | Path to OpenShift pull secret |
-| `ssh_public_key_path` | `/root/.ssh/id_rsa.pub` | SSH public key for node access |
-| `assisted_service_url` | `http://localhost:8090` | Assisted Installer service URL |
-| `assisted_service_ip` | `198.51.100.9` | IP address for Assisted Service access |
-
-### `install-osac` — deploy OSAC + fulfillment-service
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `osac_installer_repo` | `https://github.com/osac-project/osac-installer.git` | osac-installer Git repo |
-| `osac_installer_branch` | `main` | Branch to clone |
-| `osac_namespace` | `osac` | Kubernetes namespace for OSAC |
-| `osac_kustomize_overlay` | `vmaas-ci` | Kustomize overlay directory |
-| `osac_values_file` | `values/vmaas-ci/values.yaml` | Helm values file path (relative to installer dir) |
-| `osac_license_path` | `license.zip` (repo root) | AAP license zip file path |
-| `osac_operator_image` | `""` (use installer default) | Override OSAC operator image |
-| `fulfillment_service_image` | `""` (use installer default) | Override fulfillment-service image |
-| `osac_aap_image` | `""` (use installer default) | Override AAP bootstrap image |
-| `fulfillment_service_repo` | `https://github.com/osac-project/fulfillment-service.git` | fulfillment-service Git repo (for osac CLI) |
-| `fulfillment_service_branch` | `main` | Branch to clone |
-
-### `caas` — CaaS flow (discover-caas-hosts + setup-caas)
-
-#### discover-caas-hosts
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `caas_discovery_vm_patterns` | `[hgx-pod00-su0-h01..h03]` | VM name patterns for discovery servers |
-| `caas_discovery_vcpu` | `4` | vCPUs per discovery server |
-| `caas_discovery_memory_mb` | `16384` | Memory in MB (16 GB) |
-| `caas_discovery_disk_gb` | `100` | Boot disk size in GB |
-| `caas_discovery_infraenv_name` | `caas-infraenv` | InfraEnv CR name |
-
-#### setup-caas
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `caas_host_type_id` | `ci-worker` | Host type ID registered in fulfillment API |
-| `caas_cluster_catalog_item` | `hosted_cluster_offering` | Catalog item for cluster creation |
-| `caas_cluster_name` | `caas-ci-cluster` | Name for the created cluster |
-| `caas_agents` | `[{vm_pattern, netris_server_name}]` | Agent-to-Netris-server mapping |
-
-### `vmaas` / `bmaas`
-
-Not yet implemented.
-
-## Playbooks
-
-| Playbook | Roles | Purpose |
-|----------|-------|---------|
-| `setup-lab.yml` | `lab_setup` | Install prerequisites, cache images, install OCP/OSAC tools |
-| `deploy-lab.yml` | `lab_deploy` | Deploy netris-lab (K3s → topology → cloudsim → connectivity → verify) |
-| `connectivity-lab.yml` | (inline) `connectivity` | Re-run lab connectivity (VPN, BGP, softgate agents) |
-| `setup-ocp.yml` | `vm_resize`, `netris_configure` | Resize hgx-00 VM + create VPC/VNet/Subnet |
-| `install-ocp.yml` | `assisted_service`, `ocp_install` | Start Assisted Service, install OCP SNO |
-| `install-osac.yml` | `osac_install` | Install OSAC on OCP SNO |
-| `discover-caas-hosts.yml` | `caas_discovery` | Create InfraEnv, boot hgx1-3 with discovery ISO |
-| `setup-caas.yml` | `caas_setup` | Annotate agents, create host type + cluster |
-| `destroy.yml` | `destroy` | Tear down lab + Assisted Service + DNS |
-| `site.yml` | all common roles | Full end-to-end flow (VMaaS) |
-
-### How setup and deploy work
-
-Setup and deploy are split into two phases. The `lab_setup` role (run by `setup-lab.yml`) handles installation and caching. The `lab_deploy` role (run by `deploy-lab.yml`) handles infrastructure deployment. Both roles use `include_role` to run netris-lab submodule roles directly in the parent Ansible process.
-
-**`setup-lab.yml` (lab_setup role):**
-
-1. **Pre-flight checks** — validates Netris license, OSAC/AAP license, pull secret, SSH key, KVM support, and minimum memory
-2. **prerequisites** — installs system packages, Go, Pulumi, OpenTofu, configures libvirt/bridges
-3. **cache** — pre-downloads container and cloud images via skopeo
-4. **OCP/OSAC tools** — installs podman, dnsmasq, aicli, oc, helm, Go, and builds the osac CLI from fulfillment-service
-
-**`deploy-lab.yml` (lab_deploy role):**
-
-1. **Pre-flight checks** — re-validates environment
-2. **k3s_controller** — deploys K3s and Netris controller Helm chart
-3. **topology** — creates network topology in Netris API via OpenTofu
-4. **cloudsim** — provisions KVM VMs via Pulumi
-5. **connectivity** — sets up VPN, socat forwarding, ISP BGP, softgate agents
-6. **verify** — health checks (switches, softgates, E-BGP, license, API)
+See [`inventory/group_vars/all.yml`](inventory/group_vars/all.yml) for the full list.
 
 ## CI Integration
 
