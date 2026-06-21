@@ -49,6 +49,9 @@
     mode: "0644"
     validate_certs: false
   register: _iso_download
+  until: _iso_download is success
+  retries: 30
+  delay: 10
 
 - name: Find discovery VMs
   ansible.builtin.shell:
