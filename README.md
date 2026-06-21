@@ -75,6 +75,8 @@ make destroy
 
 After `make install-ocp`, the kubeconfig is at `/root/.kube/config`.
 
+After `make deploy`, the Netris controller UI is available at `https://<hypervisor>:9443`. After `make install-ocp`, the Assisted Installer UI is available at `http://<hypervisor>:8080`.
+
 ## Configuration
 
 All parameters are in [`inventory/group_vars/all.yml`](inventory/group_vars/all.yml). Override with `-e`:
