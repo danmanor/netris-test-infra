@@ -48,6 +48,12 @@
     remote_src: true
     mode: preserve
 
+- name: Remove console-proxy-shared-dev from overlay
+  ansible.builtin.replace:
+    path: "{{ osac_installer_dir }}/overlays/{{ osac_kustomize_overlay }}/kustomization.yaml"
+    regexp: '^\s*-\s*\.\./_shared/console-proxy-shared-dev\s*$'
+    replace: ''
+
 - name: Override component images in values file
   when: osac_operator_image or fulfillment_service_image or osac_aap_image
   block:
