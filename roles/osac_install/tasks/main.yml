@@ -239,6 +239,8 @@
       SERVER_SSH_BASTION_HOST=192.168.16.254
       SERVER_SSH_BASTION_USER=root
       SERVER_SSH_USER=root
+      DNS_CLASS=dns.hypervisor.dns
+      DNS_ZONE={{ ocp_base_domain }}
     mode: "0644"
 
 - name: Write AAP secrets env file
@@ -259,6 +261,7 @@
       export INSTALLER_KUSTOMIZE_OVERLAY={{ osac_kustomize_overlay }}
       export VALUES_FILE={{ osac_values_file }}
       export EXTRA_SERVICES=true
+      export AAP_PROJECT_GIT_BRANCH={{ osac_aap_branch | default('main') }}
       export NETWORK_CLASS=netris
       export NETWORK_STEPS_COLLECTION=netris.steps
       export EXTERNAL_ACCESS_BASE_DOMAIN={{ ocp_base_domain }}
