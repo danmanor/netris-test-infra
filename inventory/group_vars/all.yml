@@ -40,8 +40,8 @@ osac_installer_repo: "https://github.com/osac-project/osac-installer.git"
 osac_installer_branch: "main"
 osac_installer_dir: "/opt/osac-installer"
 osac_namespace: "osac"
-osac_kustomize_overlay: "vmaas-ci"
-osac_values_file: "values/vmaas-ci/values.yaml"
+osac_kustomize_overlay: "osac-devel"
+osac_values_file: "values/development/values.yaml"
 osac_license_path: "{{ inventory_dir }}/../license.zip"
 
 # OSAC Component Images (leave empty to use osac-installer defaults)

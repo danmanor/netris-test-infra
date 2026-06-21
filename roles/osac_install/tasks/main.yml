@@ -32,6 +32,13 @@
   register: _submodule_update
   changed_when: _submodule_update.stdout | length > 0
 
+- name: Copy development overlay to working overlay
+  ansible.builtin.copy:
+    src: "{{ osac_installer_dir }}/overlays/development/"
+    dest: "{{ osac_installer_dir }}/overlays/{{ osac_kustomize_overlay }}/"
+    remote_src: true
+    mode: preserve
+
 - name: Override component images in values file
   when: osac_operator_image or fulfillment_service_image or osac_aap_image
   block:
