@@ -81,7 +81,15 @@
     state: restarted
   when: _dnsmasq_mgmt is changed
 
+- name: Check if mgmt-server DNS is already configured
+  ansible.builtin.shell:
+    cmd: ssh -o StrictHostKeyChecking=no root@192.168.16.1 "nslookup api.{{ ocp_cluster_name }}.{{ ocp_base_domain }} 127.0.0.1 2>&1 | grep -q {{ ocp_dnat_ip }}"
+  register: _mgmt_dns_check
+  failed_when: false
+  changed_when: false
+
 - name: Configure OCP DNS on mgmt-server for agent discovery
+  when: _mgmt_dns_check.rc != 0
   ansible.builtin.shell:
     cmd: |
       ssh -o StrictHostKeyChecking=no root@192.168.16.1 "
@@ -92,9 +100,11 @@
         systemctl stop systemd-resolved 2>/dev/null
         systemctl disable systemd-resolved 2>/dev/null
 
-        # Kill cloud-init dnsmasq that holds port 53
-        pkill -f '/usr/sbin/dnsmasq.*-x /run/dnsmasq' 2>/dev/null || true
-        sleep 1
+        # Kill cloud-init dnsmasq if it holds port 53
+        if ! systemctl is-active dnsmasq >/dev/null 2>&1; then
+          pkill -f '/usr/sbin/dnsmasq.*--local-service' 2>/dev/null || true
+          sleep 1
+        fi
 
         # Add OCP DNS entries
         mkdir -p /etc/dnsmasq.d
