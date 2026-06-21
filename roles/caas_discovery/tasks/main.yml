@@ -7,7 +7,8 @@
   loop:
     - infrastructure-operator
     - multicluster-engine-operator
-  changed_when: true
+  register: _scale_result
+  changed_when: "'scaled' in _scale_result.stdout"
   failed_when: false
 
 - name: Filter OS_IMAGES and patch assisted-service ConfigMap and StatefulSet
