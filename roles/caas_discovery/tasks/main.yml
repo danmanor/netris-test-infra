@@ -195,23 +195,13 @@
     label: "{{ item.item }}"
   changed_when: true
 
-- name: Get attached disks
-  ansible.builtin.shell:
-    cmd: virsh domblklist {{ item }} --details | awk 'NR>2 && $1=="file" {print $3}'
-  register: _attached_disks
-  changed_when: false
-  loop: "{{ caas_discovery_vms }}"
-
-- name: Detach existing disks
+- name: Detach all existing disks
   ansible.builtin.shell:
     cmd: |
-      for target in $(virsh domblklist {{ item.item }} --details | awk 'NR>2 && $1=="file" {print $3}'); do
-        virsh detach-disk {{ item.item }} "$target" --config
+      for target in $(virsh domblklist {{ item }} | awk 'NR>2 && NF>1 {print $1}'); do
+        virsh detach-disk {{ item }} "$target" --config 2>/dev/null || true
       done
-  when: item.stdout_lines | length > 0
-  loop: "{{ _attached_disks.results }}"
-  loop_control:
-    label: "{{ item.item }}"
+  loop: "{{ caas_discovery_vms }}"
   changed_when: true
 
 - name: Create empty boot disk for each VM
