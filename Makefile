@@ -51,7 +51,10 @@ reset-ocp:
 destroy-osac:
 	@echo "=== Tearing down OSAC ==="
 	cd /opt/osac-installer && source /tmp/osac-setup.env && \
-		EXTRA_SERVICES=true ./scripts/teardown.sh
+		EXTRA_SERVICES=true ./scripts/teardown.sh || true
+	oc delete namespace osac-devel --ignore-not-found --wait=false 2>/dev/null || true
+	rm -rf /opt/osac-installer
+	rm -f /tmp/osac-setup.env
 
 destroy:
 	ansible-playbook playbooks/destroy.yml $(ANSIBLE_EXTRA)
