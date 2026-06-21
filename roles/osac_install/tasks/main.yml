@@ -214,7 +214,7 @@
     mode: "0600"
   no_log: true
 
-- name: Run OSAC setup.sh (log at /tmp/osac-setup.log)
+- name: Run OSAC setup.sh (tail -f /tmp/osac-setup.log for live output)
   ansible.builtin.shell:
     cmd: ./scripts/setup.sh 2>&1 | tee /tmp/osac-setup.log
     chdir: "{{ osac_installer_dir }}"
