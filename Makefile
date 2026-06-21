@@ -28,6 +28,8 @@ prep-osac:
 	ansible-playbook playbooks/install-osac.yml $(ANSIBLE_EXTRA)
 
 run-osac-setup:
+	@echo "=== Rebuilding Helm chart dependencies ==="
+	cd /opt/osac-installer && git submodule update --init --recursive --remote && helm dependency update charts/osac/
 	@echo "=== Running OSAC setup.sh with live output ==="
 	cd /opt/osac-installer && source /tmp/osac-setup.env && ./scripts/setup.sh
 
