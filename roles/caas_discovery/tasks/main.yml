@@ -92,6 +92,10 @@
         systemctl stop systemd-resolved 2>/dev/null
         systemctl disable systemd-resolved 2>/dev/null
 
+        # Kill cloud-init dnsmasq that holds port 53
+        pkill -f '/usr/sbin/dnsmasq.*-x /run/dnsmasq' 2>/dev/null || true
+        sleep 1
+
         # Add OCP DNS entries
         mkdir -p /etc/dnsmasq.d
         cat > /etc/dnsmasq.d/ocp-sno.conf << DNSEOF
