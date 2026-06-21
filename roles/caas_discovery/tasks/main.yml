@@ -85,21 +85,31 @@
   ansible.builtin.shell:
     cmd: |
       ssh -o StrictHostKeyChecking=no root@192.168.16.1 "
+        changed=false
+
         # Add OCP DNS entries to existing dnsmasq
         mkdir -p /etc/dnsmasq.d
-        cat > /etc/dnsmasq.d/ocp-sno.conf << DNSEOF
-      address=/api.{{ ocp_cluster_name }}.{{ ocp_base_domain }}/{{ ocp_dnat_ip }}
-      address=/.apps.{{ ocp_cluster_name }}.{{ ocp_base_domain }}/{{ ocp_dnat_ip }}
-      DNSEOF
+        DESIRED='address=/api.{{ ocp_cluster_name }}.{{ ocp_base_domain }}/{{ ocp_dnat_ip }}
+      address=/.apps.{{ ocp_cluster_name }}.{{ ocp_base_domain }}/{{ ocp_dnat_ip }}'
+        if [ ! -f /etc/dnsmasq.d/ocp-sno.conf ] || [ \"\$(cat /etc/dnsmasq.d/ocp-sno.conf)\" != \"\$DESIRED\" ]; then
+          echo \"\$DESIRED\" > /etc/dnsmasq.d/ocp-sno.conf
+          pkill -HUP dnsmasq 2>/dev/null || true
+          changed=true
+        fi
 
         # Point DHCP DNS to mgmt-server so agents use local dnsmasq
-        sed -i 's/option domain-name-servers .*/option domain-name-servers 192.168.16.1, 8.8.8.8;/' /etc/dhcp/dhcpd.conf
+        if grep -q 'option domain-name-servers 192.168.16.1' /etc/dhcp/dhcpd.conf; then
+          :
+        else
+          sed -i 's/option domain-name-servers .*/option domain-name-servers 192.168.16.1, 8.8.8.8;/' /etc/dhcp/dhcpd.conf
+          systemctl restart isc-dhcp-server 2>/dev/null || true
+          changed=true
+        fi
 
-        # Restart services to pick up changes
-        pkill -HUP dnsmasq 2>/dev/null || true
-        systemctl restart isc-dhcp-server 2>/dev/null || true
+        echo \$changed
       "
-  changed_when: true
+  register: _mgmt_dns_result
+  changed_when: "'true' in _mgmt_dns_result.stdout"
 
 - name: Read SSH public key
   ansible.builtin.slurp:
