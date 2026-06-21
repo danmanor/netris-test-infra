@@ -1,5 +1,6 @@
 .PHONY: deploy setup deploy-lab deploy-ocp deploy-osac setup-caas deploy-caas \
-       destroy destroy-osac destroy-ocp \
+       deploy-vmaas deploy-bmaas \
+       destroy destroy-osac destroy-ocp destroy-caas destroy-vmaas destroy-bmaas \
        connectivity prep-osac run-osac-setup vendor-update lint
 
 EXTRA_VARS ?=
@@ -30,12 +31,18 @@ run-osac-setup:
 	@echo "=== Running OSAC setup.sh with live output ==="
 	cd /opt/osac-installer && source /tmp/osac-setup.env && ./scripts/setup.sh
 
-# CaaS flow
+# Per-flow targets — run after deploy
 setup-caas:
 	ansible-playbook playbooks/setup-caas.yml $(ANSIBLE_EXTRA)
 
 deploy-caas:
 	ansible-playbook playbooks/deploy-caas.yml $(ANSIBLE_EXTRA)
+
+deploy-vmaas:
+	@echo "VMaaS flow is not yet implemented"
+
+deploy-bmaas:
+	@echo "BMaaS flow is not yet implemented"
 
 # Destroy targets
 destroy:
@@ -51,6 +58,15 @@ destroy-osac:
 
 destroy-ocp:
 	ansible-playbook playbooks/reset-ocp.yml $(ANSIBLE_EXTRA)
+
+destroy-caas:
+	@echo "CaaS teardown is not yet implemented"
+
+destroy-vmaas:
+	@echo "VMaaS teardown is not yet implemented"
+
+destroy-bmaas:
+	@echo "BMaaS teardown is not yet implemented"
 
 # Utilities
 vendor-update:
