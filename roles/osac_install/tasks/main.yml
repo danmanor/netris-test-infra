@@ -258,9 +258,7 @@
       export INSTALLER_NAMESPACE={{ osac_namespace }}
       export INSTALLER_KUSTOMIZE_OVERLAY={{ osac_kustomize_overlay }}
       export VALUES_FILE={{ osac_values_file }}
-      export VIRT_SERVICE=true
-      export STORAGE_SERVICE=true
-      export INGRESS_SERVICE=true
+      export EXTRA_SERVICES=true
       export NETWORK_CLASS=netris
       export NETWORK_STEPS_COLLECTION=netris.steps
       export EXTERNAL_ACCESS_BASE_DOMAIN={{ ocp_base_domain }}
