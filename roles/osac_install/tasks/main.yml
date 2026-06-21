@@ -173,6 +173,41 @@
     - server-ssh-key
     - server-ssh-bastion-key
 
+- name: Write AAP configuration env file
+  ansible.builtin.copy:
+    dest: "{{ osac_installer_dir }}/overlays/{{ osac_kustomize_overlay }}/files/osac-aap-configuration.env"
+    content: |
+      NETWORK_CLASS=netris
+      NETWORK_STEPS_COLLECTION=netris.steps
+      EXTERNAL_ACCESS_BASE_DOMAIN={{ ocp_base_domain }}
+      EXTERNAL_ACCESS_SUPPORTED_BASE_DOMAINS={{ ocp_base_domain }}
+      EXTERNAL_ACCESS_API_INTERNAL_NETWORK=hypershift
+      HOSTED_CLUSTER_BASE_DOMAIN={{ ocp_base_domain }}
+      HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY=SingleReplica
+      HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY=SingleReplica
+      NETRIS_CONTROLLER_URL={{ _netris_ctl_url }}
+      NETRIS_USERNAME={{ netris_username }}
+      NETRIS_SITE_ID={{ _netris_site_id }}
+      NETRIS_TENANT_ID=1
+      NETRIS_TENANT_NAME=Admin
+      NETRIS_MGMT_VPC_ID={{ _netris_mgmt_vpc_id }}
+      NETRIS_MGMT_VPC_NAME={{ ocp_vpc_name }}
+      NETRIS_RESOURCE_CLASS_MAP={{ _netris_resource_class_map }}
+      SERVER_MGMT_ROUTE_DESTINATION=192.168.16.0/20
+      SERVER_MGMT_ROUTE_GATEWAY=192.168.16.1
+      SERVER_SSH_BASTION_HOST=192.168.16.254
+      SERVER_SSH_BASTION_USER=root
+      SERVER_SSH_USER=root
+    mode: "0644"
+
+- name: Write AAP secrets env file
+  ansible.builtin.copy:
+    dest: "{{ osac_installer_dir }}/overlays/{{ osac_kustomize_overlay }}/files/osac-aap-secrets.env"
+    content: |
+      NETRIS_PASSWORD={{ netris_password }}
+    mode: "0600"
+  no_log: true
+
 - name: Check if OSAC is already deployed
   ansible.builtin.shell:
     cmd: oc get deployment -n {{ osac_namespace }} --no-headers 2>/dev/null | wc -l
