@@ -64,6 +64,49 @@
     KUBECONFIG: /root/.kube/config
   changed_when: false
 
+- name: Ensure dnsmasq listens on br-mgmt for agent DNS
+  ansible.builtin.lineinfile:
+    path: /etc/dnsmasq.d/ocp-sno.conf
+    line: "{{ item }}"
+    state: present
+  loop:
+    - "interface=br-mgmt"
+    - "no-dhcp-interface=br-mgmt"
+  register: _dnsmasq_mgmt
+  notify: restart dnsmasq
+
+- name: Restart dnsmasq if config changed
+  ansible.builtin.systemd:
+    name: dnsmasq
+    state: restarted
+  when: _dnsmasq_mgmt is changed
+
+- name: Configure OCP DNS on mgmt-server for agent discovery
+  ansible.builtin.shell:
+    cmd: |
+      ssh -o StrictHostKeyChecking=no root@192.168.16.1 "
+        # Install dnsmasq if missing
+        which dnsmasq >/dev/null 2>&1 || apt-get install -y dnsmasq >/dev/null 2>&1
+
+        # Stop systemd-resolved to free port 53
+        systemctl stop systemd-resolved 2>/dev/null
+        systemctl disable systemd-resolved 2>/dev/null
+
+        # Add OCP DNS entries
+        mkdir -p /etc/dnsmasq.d
+        cat > /etc/dnsmasq.d/ocp-sno.conf << DNSEOF
+      address=/api.{{ ocp_cluster_name }}.{{ ocp_base_domain }}/{{ ocp_dnat_ip }}
+      address=/.apps.{{ ocp_cluster_name }}.{{ ocp_base_domain }}/{{ ocp_dnat_ip }}
+      DNSEOF
+
+        # Set resolv.conf to use local dnsmasq + upstream
+        echo -e 'nameserver 127.0.0.1\nnameserver 8.8.8.8' > /etc/resolv.conf
+
+        # Restart dnsmasq
+        systemctl restart dnsmasq
+      "
+  changed_when: true
+
 - name: Read SSH public key
   ansible.builtin.slurp:
     src: "{{ ssh_public_key_path }}"
