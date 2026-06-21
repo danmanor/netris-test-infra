@@ -67,7 +67,7 @@ caas_discovery_infraenv_name: "infraenv"
 caas_discovery_infraenv_namespace: "hardware-inventory"
 
 # CaaS Setup (host type, agent annotations, cluster creation)
-caas_agent_namespace: "{{ osac_namespace }}"
+caas_agent_namespace: "{{ caas_discovery_infraenv_namespace }}"
 caas_host_type_id: "ci-worker"
 caas_host_type_title: "CI Worker"
 caas_host_type_description: "Worker nodes for CI testing"
