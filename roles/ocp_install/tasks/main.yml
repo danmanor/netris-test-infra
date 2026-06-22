@@ -213,9 +213,15 @@
   when: _cluster_status.stdout | trim not in ['installed', 'installing', 'finalizing']
   changed_when: true
 
-- name: Wait for installation to complete
-  ansible.builtin.command:
-    cmd: aicli -u {{ assisted_service_url }} wait cluster {{ ocp_cluster_name }} --status installed
+- name: Wait for installation to reach finalizing
+  ansible.builtin.shell:
+    cmd: |
+      status=$(aicli -u {{ assisted_service_url }} info cluster {{ ocp_cluster_name }} | grep '^status:' | awk '{print $2}')
+      [ "$status" = "finalizing" ] || [ "$status" = "installed" ]
+  register: _wait_finalizing
+  until: _wait_finalizing.rc == 0
+  retries: 120
+  delay: 30
   changed_when: false
 
 - name: Download kubeconfig
