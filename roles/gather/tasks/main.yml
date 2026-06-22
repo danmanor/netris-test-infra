@@ -2,6 +2,7 @@
 - name: Load netris-lab variables
   ansible.builtin.include_vars:
     file: "{{ netris_lab_dir }}/group_vars/all.yml"
+  ignore_errors: true
 
 - name: Set gather directory
   ansible.builtin.set_fact:
@@ -12,6 +13,7 @@
     path: "{{ _gather_dir }}/{{ item }}"
     state: directory
     mode: "0755"
+  failed_when: false
   loop:
     - host
     - networking
@@ -239,6 +241,7 @@
     dest: /var/log/netris-gather/latest
     state: link
     force: true
+  failed_when: false
 
 - name: Print gather location
   ansible.builtin.debug:
