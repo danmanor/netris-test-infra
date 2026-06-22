@@ -75,15 +75,16 @@
     replace: 'OSAC_ENABLE_CLUSTER_CONTROLLER'
 
 - name: Inject AAP token from secret into operator chart template
-  ansible.builtin.shell:
-    cmd: |
-      sed -i '/{% raw %}{{- if .Values.aap.token }}{% endraw %}/,/{% raw %}{{- end }}{% endraw %}/c\
-          - name: OSAC_AAP_TOKEN\
-            valueFrom:\
-              secretKeyRef:\
-                name: osac-aap-api-token\
-                key: token' {{ osac_installer_dir }}/base/osac-operator/charts/operator/templates/deployment.yaml
-  changed_when: true
+  ansible.builtin.replace:
+    path: "{{ osac_installer_dir }}/base/osac-operator/charts/operator/templates/deployment.yaml"
+    regexp: >-
+      {% raw %}\{\{- if \.Values\.aap\.token \}\}\n\s+- name: OSAC_AAP_TOKEN\n\s+value:.*\n\s+\{\{- end \}\}{% endraw %}
+    replace: |-
+      - name: OSAC_AAP_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: osac-aap-api-token
+                      key: token
 
 - name: Disable bare-metal fulfillment operator
   ansible.builtin.blockinfile:
