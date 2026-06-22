@@ -10,6 +10,21 @@
   failed_when: false
   changed_when: false
 
+- name: Wait for MCE operator pods to terminate
+  ansible.builtin.shell:
+    cmd: oc get pods -n multicluster-engine -l app={{ item }} --no-headers 2>/dev/null | grep -v Terminating | wc -l
+  environment:
+    KUBECONFIG: /root/.kube/config
+  register: _mce_pods
+  until: _mce_pods.stdout | int == 0
+  retries: 30
+  delay: 5
+  changed_when: false
+  failed_when: false
+  loop:
+    - infrastructure-operator
+    - multicluster-engine-operator
+
 - name: Check if OS_IMAGES is already filtered
   ansible.builtin.shell:
     cmd: |
@@ -56,6 +71,13 @@
     - name: Restart assisted-service to pick up filtered images
       ansible.builtin.command:
         cmd: oc rollout restart deployment/assisted-service -n multicluster-engine
+      environment:
+        KUBECONFIG: /root/.kube/config
+      changed_when: true
+
+    - name: Restart assisted-image-service to pick up filtered images
+      ansible.builtin.command:
+        cmd: oc rollout restart statefulset/assisted-image-service -n multicluster-engine
       environment:
         KUBECONFIG: /root/.kube/config
       changed_when: true
