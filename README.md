@@ -145,6 +145,25 @@ make destroy        # tear down everything
 make deploy         # full redeploy
 ```
 
+## Accessing OCP Routes
+
+After `make deploy-osac`, a socat forwarder on port 9444 provides access to OCP routes (AAP UI, OCP console, fulfillment API) from external browsers. Port 443 is intercepted by K3s svclb (Netris controller), so 9444 is used instead.
+
+Add to your local `/etc/hosts`:
+```
+<server-ip>  osac-aap-osac-devel.apps.ocp-sno.osac.local
+<server-ip>  console-openshift-console.apps.ocp-sno.osac.local
+<server-ip>  fulfillment-api-osac-devel.apps.ocp-sno.osac.local
+```
+
+Then browse to `https://osac-aap-osac-devel.apps.ocp-sno.osac.local:9444` (accept the self-signed cert).
+
+| Service | URL |
+|---------|-----|
+| AAP UI | `https://osac-aap-osac-devel.apps.ocp-sno.osac.local:9444` |
+| OCP Console | `https://console-openshift-console.apps.ocp-sno.osac.local:9444` |
+| Netris Controller | `http://<server-ip>:9443` |
+
 ## How deploy-osac Works
 
 `make deploy-osac` runs in two phases for live terminal output:
