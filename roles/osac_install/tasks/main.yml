@@ -286,6 +286,14 @@
       export SERVER_MGMT_ROUTE_GATEWAY=192.168.16.1
     mode: "0600"
 
+- name: Start socat forward for OCP ingress (port 9444 → OCP 443)
+  ansible.builtin.shell:
+    cmd: |
+      pkill -f 'socat.*TCP-LISTEN:9444.*198.51.100.2' 2>/dev/null || true
+      socat TCP-LISTEN:9444,fork,reuseaddr TCP:{{ ocp_dnat_ip }}:443 &
+      disown
+  changed_when: false
+
 - name: Report OSAC preparation complete
   ansible.builtin.debug:
-    msg: "OSAC prepared. Run 'make run-osac-setup' to execute setup.sh with live output."
+    msg: "OSAC prepared. OCP routes accessible at https://<hostname>:9444. Run 'make run-osac-setup' to execute setup.sh with live output."
