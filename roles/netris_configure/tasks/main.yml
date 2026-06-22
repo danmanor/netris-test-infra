@@ -111,7 +111,7 @@
           type: "l2vpn"
           vlan: "untagged"
           vlanID: "auto"
-          serverNics: ["eth9"]
+          serverNics: ["ens5"]
           ipv4Gateway: "192.168.101.254/24"
     validate_certs: false
     status_code: [200, 201]
