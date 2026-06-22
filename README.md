@@ -34,6 +34,7 @@ Internet access for OCP image pulls flows through: hgx-00 → NS VNet → softga
 ## Prerequisites
 
 - **Bare-metal host** running RHEL 9.x or Rocky Linux 9.x with KVM support
+- **Ansible** — `dnf install -y ansible-core python3-pip && pip3 install ansible`
 - **Resources**: ~32+ CPU cores, 128+ GB RAM (lab VMs + OCP SNO VM)
 - **Netris license key** — place at repo root as `license.key`
 - **OSAC/AAP license** — place at repo root as `license.zip`
