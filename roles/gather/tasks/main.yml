@@ -194,9 +194,9 @@
   failed_when: false
 
 # ── Output ──
-- name: Print gathered diagnostics
-  ansible.builtin.debug:
-    msg: |
+- name: Build gather report
+  ansible.builtin.set_fact:
+    _gather_report: |
       ============================================================
       DIAGNOSTIC GATHER — {{ ansible_date_time.iso8601 }}
       ============================================================
@@ -291,3 +291,30 @@
       ============================================================
       END DIAGNOSTIC GATHER
       ============================================================
+
+- name: Ensure gather log directory exists
+  ansible.builtin.file:
+    path: /var/log/netris-gather
+    state: directory
+    mode: "0755"
+
+- name: Write gather report to file
+  ansible.builtin.copy:
+    content: "{{ _gather_report }}"
+    dest: "/var/log/netris-gather/gather-{{ ansible_date_time.iso8601_basic_short }}.log"
+    mode: "0644"
+
+- name: Create latest symlink
+  ansible.builtin.file:
+    src: "/var/log/netris-gather/gather-{{ ansible_date_time.iso8601_basic_short }}.log"
+    dest: /var/log/netris-gather/latest.log
+    state: link
+    force: true
+
+- name: Print gather report
+  ansible.builtin.debug:
+    msg: "{{ _gather_report }}"
+
+- name: Print report location
+  ansible.builtin.debug:
+    msg: "Report saved to /var/log/netris-gather/gather-{{ ansible_date_time.iso8601_basic_short }}.log (symlinked at /var/log/netris-gather/latest.log)"
