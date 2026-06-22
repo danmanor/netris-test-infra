@@ -112,7 +112,7 @@
           vlan: "untagged"
           vlanID: "auto"
           serverNics: ["eth9"]
-          ipv4Gateway: "192.168.7.254/21"
+          ipv4Gateway: "192.168.100.254/24"
     validate_certs: false
     status_code: [200, 201]
   when: _sct_list.json.data | selectattr('name', 'equalto', caas_server_cluster_template_name) | list | length == 0
