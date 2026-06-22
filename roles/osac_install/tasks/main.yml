@@ -122,6 +122,10 @@
     - osac-os-clouds
     - osac-inventory-config
   changed_when: false
+  register: _secrets_result
+  until: _secrets_result.rc == 0
+  retries: 10
+  delay: 15
 
 - name: Copy AAP license file to overlay
   ansible.builtin.copy:
@@ -144,6 +148,9 @@
     KUBECONFIG: /root/.kube/config
   register: _apps_domain
   changed_when: false
+  until: _apps_domain.rc == 0 and _apps_domain.stdout | length > 0
+  retries: 10
+  delay: 15
 
 - name: Set fulfillment hostnames in values file
   ansible.builtin.replace:
@@ -161,6 +168,9 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   register: _traefik_nodeport
   changed_when: false
+  until: _traefik_nodeport.rc == 0 and _traefik_nodeport.stdout | length > 0
+  retries: 10
+  delay: 15
 
 - name: Set Netris controller URL
   ansible.builtin.set_fact:
