@@ -286,13 +286,21 @@
       export SERVER_MGMT_ROUTE_GATEWAY=192.168.16.1
     mode: "0600"
 
-- name: Start socat forward for OCP ingress (port 9444 → OCP 443)
-  ansible.builtin.shell:
-    cmd: |
-      pkill -f 'socat.*TCP-LISTEN:9444.*{{ ocp_dnat_ip }}' 2>/dev/null || true
-      sleep 1
-      nohup socat TCP-LISTEN:9444,fork,reuseaddr TCP:{{ ocp_dnat_ip }}:443 </dev/null >/dev/null 2>&1 &
-  changed_when: false
+- name: Create socat env file for OCP ingress (port 9444 → OCP 443)
+  ansible.builtin.copy:
+    dest: /etc/netris-lab/socat/0.0.0.0-9444.env
+    content: |
+      BIND_IP=0.0.0.0
+      PORT=9444
+      TARGET_IP={{ ocp_dnat_ip }}
+      TARGET_PORT=443
+
+- name: Enable and start OCP ingress socat forwarder
+  ansible.builtin.systemd:
+    name: socat-forwarder@0.0.0.0-9444
+    state: started
+    enabled: true
+    daemon_reload: true
 
 - name: Report OSAC preparation complete
   ansible.builtin.debug:
