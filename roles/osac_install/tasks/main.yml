@@ -77,7 +77,7 @@
 - name: Inject AAP token from secret into operator chart template
   ansible.builtin.shell:
     cmd: |
-      sed -i '/{{- if .Values.aap.token }}/,/{{- end }}/c\
+      sed -i '/{% raw %}{{- if .Values.aap.token }}{% endraw %}/,/{% raw %}{{- end }}{% endraw %}/c\
           - name: OSAC_AAP_TOKEN\
             valueFrom:\
               secretKeyRef:\
