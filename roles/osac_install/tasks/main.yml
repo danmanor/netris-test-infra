@@ -33,6 +33,7 @@
     dest: "{{ osac_installer_dir }}"
     version: "{{ osac_installer_branch }}"
     force: true
+  when: not osac_installer_skip_clone
 
 - name: Initialize submodules
   ansible.builtin.command:
@@ -40,6 +41,7 @@
     chdir: "{{ osac_installer_dir }}"
   register: _submodule_update
   changed_when: _submodule_update.stdout | length > 0
+  when: not osac_installer_skip_clone
 
 - name: Copy development overlay to working overlay
   ansible.builtin.copy:

@@ -44,6 +44,9 @@ osac_kustomize_overlay: "osac-devel"
 osac_values_file: "values/development/values.yaml"
 osac_license_path: "{{ inventory_dir }}/../license.zip"
 
+# OSAC Installer source (set to true in CI when code is pre-extracted from image)
+osac_installer_skip_clone: false
+
 # OSAC Component Images (leave empty to use osac-installer defaults)
 osac_operator_image: ""
 fulfillment_service_image: ""
