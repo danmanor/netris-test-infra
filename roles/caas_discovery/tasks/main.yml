@@ -153,6 +153,9 @@
   no_log: true
   register: _pull_secret_result
   changed_when: "'created' in _pull_secret_result.stdout"
+  until: _pull_secret_result.rc == 0
+  retries: 10
+  delay: 15
 
 - name: Create InfraEnv CR
   ansible.builtin.template:
@@ -163,8 +166,13 @@
 - name: Apply InfraEnv CR
   ansible.builtin.command:
     cmd: oc apply -f /tmp/caas-infraenv.yml
+  environment:
+    KUBECONFIG: /root/.kube/config
   register: _infraenv_apply
   changed_when: "'configured' in _infraenv_apply.stdout"
+  until: _infraenv_apply.rc == 0
+  retries: 10
+  delay: 15
 
 - name: Wait for discovery ISO URL
   ansible.builtin.shell:

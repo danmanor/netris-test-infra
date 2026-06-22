@@ -35,6 +35,10 @@
     cmd: aicli create onprem -P onprem_ip={{ assisted_service_ip }}
     chdir: /root
   when: _ai_check.rc != 0
+  register: _ai_deploy
+  until: _ai_deploy.rc == 0
+  retries: 5
+  delay: 15
   changed_when: true
 
 - name: Filter OS_IMAGES to x86_64 for target version

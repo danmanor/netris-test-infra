@@ -6,6 +6,9 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   register: _traefik_nodeport
   changed_when: false
+  until: _traefik_nodeport.rc == 0 and _traefik_nodeport.stdout | length > 0
+  retries: 10
+  delay: 15
 
 - name: Set controller URL
   ansible.builtin.set_fact:

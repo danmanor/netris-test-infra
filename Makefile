@@ -1,7 +1,7 @@
 .PHONY: deploy setup deploy-lab deploy-ocp deploy-osac setup-caas deploy-caas \
        deploy-vmaas deploy-bmaas \
        destroy destroy-osac destroy-ocp destroy-caas destroy-vmaas destroy-bmaas \
-       connectivity prep-osac run-osac-setup vendor-update lint
+       connectivity prep-osac run-osac-setup vendor-update lint gather
 
 EXTRA_VARS ?=
 ANSIBLE_EXTRA = $(if $(EXTRA_VARS),-e '$(EXTRA_VARS)')
@@ -78,3 +78,6 @@ vendor-update:
 
 lint:
 	ansible-lint
+
+gather:
+	ansible-playbook playbooks/gather.yml $(ANSIBLE_EXTRA)

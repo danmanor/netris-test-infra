@@ -101,6 +101,10 @@
   ansible.builtin.command:
     cmd: aicli -u {{ assisted_service_url }} create cluster {{ ocp_cluster_name }} --paramfile /tmp/aicli-params.yml
   when: _cluster_check.rc != 0
+  register: _cluster_create
+  until: _cluster_create.rc == 0
+  retries: 10
+  delay: 15
   changed_when: true
 
 - name: Check if infraenv already exists
@@ -114,6 +118,10 @@
   ansible.builtin.command:
     cmd: aicli -u {{ assisted_service_url }} create infraenv {{ ocp_cluster_name }}_infra-env --paramfile /tmp/aicli-params.yml
   when: _infraenv_check.rc != 0
+  register: _infraenv_create
+  until: _infraenv_create.rc == 0
+  retries: 10
+  delay: 15
   changed_when: true
 
 - name: Wait for ISO generation
@@ -205,12 +213,20 @@
   ansible.builtin.command:
     cmd: aicli -u {{ assisted_service_url }} wait cluster {{ ocp_cluster_name }} --status ready
   when: _cluster_status.stdout | trim not in ['installed', 'installing', 'finalizing']
+  register: _wait_ready
+  until: _wait_ready.rc == 0
+  retries: 5
+  delay: 30
   changed_when: false
 
 - name: Start OCP installation
   ansible.builtin.command:
     cmd: aicli -u {{ assisted_service_url }} start cluster {{ ocp_cluster_name }}
   when: _cluster_status.stdout | trim not in ['installed', 'installing', 'finalizing']
+  register: _start_install
+  until: _start_install.rc == 0
+  retries: 10
+  delay: 15
   changed_when: true
 
 - name: Wait for installation to reach finalizing

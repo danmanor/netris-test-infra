@@ -1,0 +1,7 @@
+---
+- name: Gather diagnostic information from hypervisor
+  hosts: all
+  become: true
+  gather_facts: true
+  roles:
+    - gather

@@ -12,8 +12,13 @@
 - name: Get agent names
   ansible.builtin.shell:
     cmd: oc get agent -n {{ caas_agent_namespace }} -o jsonpath='{.items[*].metadata.name}'
+  environment:
+    KUBECONFIG: /root/.kube/config
   register: _agent_names
   changed_when: false
+  until: _agent_names.rc == 0 and _agent_names.stdout | length > 0
+  retries: 10
+  delay: 15
 
 - name: Set agent name list
   ansible.builtin.set_fact:
@@ -26,9 +31,14 @@
       oc label agent/{{ item }} -n {{ caas_agent_namespace }}
       osac.openshift.io/resource_class={{ caas_host_type_id }}
       --overwrite
+  environment:
+    KUBECONFIG: /root/.kube/config
   loop: "{{ caas_agent_names }}"
   register: _label_rc
   changed_when: "'labeled' in _label_rc.stdout and 'not labeled' not in _label_rc.stdout"
+  until: _label_rc.rc == 0
+  retries: 5
+  delay: 10
 
 - name: Label agent with netris server name
   ansible.builtin.command:
@@ -36,17 +46,27 @@
       oc label agent/{{ caas_agent_names[idx] }} -n {{ caas_agent_namespace }}
       netris.server/name={{ item.netris_server_name }}
       --overwrite
+  environment:
+    KUBECONFIG: /root/.kube/config
   loop: "{{ caas_agents }}"
   loop_control:
     index_var: idx
   register: _label_ns
   changed_when: "'labeled' in _label_ns.stdout and 'not labeled' not in _label_ns.stdout"
+  until: _label_ns.rc == 0
+  retries: 5
+  delay: 10
 
 - name: Check agent approval status
   ansible.builtin.shell:
     cmd: oc get agent/{{ item }} -n {{ caas_agent_namespace }} -o jsonpath='{.spec.approved}'
+  environment:
+    KUBECONFIG: /root/.kube/config
   register: _agent_approved
   changed_when: false
+  until: _agent_approved.rc == 0
+  retries: 5
+  delay: 10
   loop: "{{ caas_agent_names }}"
 
 - name: Approve agents
@@ -54,18 +74,29 @@
     cmd: >-
       oc patch agent/{{ item.item }} -n {{ caas_agent_namespace }}
       --type=merge -p '{"spec":{"approved":true}}'
+  environment:
+    KUBECONFIG: /root/.kube/config
   when: item.stdout != 'true'
   loop: "{{ _agent_approved.results }}"
   loop_control:
     label: "{{ item.item }}"
+  register: _approve_result
+  until: _approve_result.rc == 0
+  retries: 5
+  delay: 10
   changed_when: true
 
 # Step 3: Register host type in fulfillment service
 - name: Get fulfillment internal API URL
   ansible.builtin.shell:
     cmd: oc get route fulfillment-internal-api -n {{ osac_namespace }} -o jsonpath='{.status.ingress[0].host}'
+  environment:
+    KUBECONFIG: /root/.kube/config
   register: _fulfillment_host
   changed_when: false
+  until: _fulfillment_host.rc == 0 and _fulfillment_host.stdout | length > 0
+  retries: 10
+  delay: 15
 
 - name: Set fulfillment API URL
   ansible.builtin.set_fact:
@@ -74,8 +105,13 @@
 - name: Get service account token
   ansible.builtin.shell:
     cmd: oc create token -n {{ osac_namespace }} admin
+  environment:
+    KUBECONFIG: /root/.kube/config
   register: _sa_token
   changed_when: false
+  until: _sa_token.rc == 0 and _sa_token.stdout | length > 0
+  retries: 10
+  delay: 15
 
 - name: Create host type
   ansible.builtin.uri:
