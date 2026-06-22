@@ -25,18 +25,20 @@
     - infrastructure-operator
     - backplane-operator
 
-- name: Check if OS_IMAGES is already filtered
+- name: Check if OS_IMAGES filtering is needed
   ansible.builtin.shell:
     cmd: |
-      oc get configmap assisted-service -n multicluster-engine -o jsonpath='{.data.OS_IMAGES}' | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))'
+      cm=$(oc get configmap assisted-service -n multicluster-engine -o jsonpath='{.data.OS_IMAGES}' | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')
+      ss=$(oc get statefulset assisted-image-service -n multicluster-engine -o json | python3 -c 'import json,sys; ss=json.load(sys.stdin); env=ss["spec"]["template"]["spec"]["containers"][0]["env"]; rhcos=next(e for e in env if e["name"]=="RHCOS_VERSIONS"); print(len(json.loads(rhcos["value"])))')
+      echo $((cm > 1 || ss > 1))
   environment:
     KUBECONFIG: /root/.kube/config
-  register: _os_images_count
+  register: _os_images_needs_filter
   changed_when: false
   failed_when: false
 
 - name: Filter MCE OS_IMAGES to target version
-  when: _os_images_count.stdout | default('0') | int > 1
+  when: _os_images_needs_filter.stdout | default('0') | int == 1
   block:
 
     - name: Filter OS_IMAGES and patch assisted-service ConfigMap and StatefulSet
