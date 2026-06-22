@@ -112,8 +112,51 @@
   failed_when: false
 
 # ── Netris controller API ──
+- name: Discover Netris controller URL for gather
+  ansible.builtin.shell: kubectl get svc traefik -n kube-system -o jsonpath='{.spec.ports[?(@.name=="web")].nodePort}'
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: _gather_traefik_np
+  changed_when: false
+  failed_when: false
+
+- name: Set Netris controller URL for gather
+  ansible.builtin.set_fact:
+    _gather_netris_url: "http://localhost:{{ _gather_traefik_np.stdout | default('0') }}"
+
 - name: Check Netris controller API
-  ansible.builtin.shell: "curl -sf -o /dev/null -w '%{http_code}' http://localhost:{{ controller_ui_port }} > {{ _gather_dir }}/netris/api-status 2>&1 || echo 'unreachable' > {{ _gather_dir }}/netris/api-status"
+  ansible.builtin.shell: "curl -sf -o /dev/null -w '%{http_code}' {{ _gather_netris_url }} > {{ _gather_dir }}/netris/api-status 2>&1 || echo 'unreachable' > {{ _gather_dir }}/netris/api-status"
+  changed_when: false
+  failed_when: false
+
+- name: Login to Netris controller
+  ansible.builtin.shell: |
+    curl -sf -c - {{ _gather_netris_url }}/api/auth \
+      -H 'Content-Type: application/json' \
+      -d '{"user":"{{ netris_login }}","password":"{{ netris_password }}","auth_scheme_id":1}' \
+      2>/dev/null | grep connect.sid | awk '{print $NF}'
+  register: _gather_netris_cookie
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: Gather Netris VPCs
+  ansible.builtin.shell: "curl -sf -b 'connect.sid={{ _gather_netris_cookie.stdout }}' {{ _gather_netris_url }}/api/v2/vpc 2>&1 | python3 -m json.tool > {{ _gather_dir }}/netris/vpcs 2>&1 || echo 'unavailable' > {{ _gather_dir }}/netris/vpcs"
+  changed_when: false
+  failed_when: false
+
+- name: Gather Netris VNets
+  ansible.builtin.shell: "curl -sf -b 'connect.sid={{ _gather_netris_cookie.stdout }}' {{ _gather_netris_url }}/api/v2/vnet 2>&1 | python3 -m json.tool > {{ _gather_dir }}/netris/vnets 2>&1 || echo 'unavailable' > {{ _gather_dir }}/netris/vnets"
+  changed_when: false
+  failed_when: false
+
+- name: Gather Netris subnets
+  ansible.builtin.shell: "curl -sf -b 'connect.sid={{ _gather_netris_cookie.stdout }}' {{ _gather_netris_url }}/api/v2/ipam/subnets 2>&1 | python3 -m json.tool > {{ _gather_dir }}/netris/subnets 2>&1 || echo 'unavailable' > {{ _gather_dir }}/netris/subnets"
+  changed_when: false
+  failed_when: false
+
+- name: Gather Netris NAT rules
+  ansible.builtin.shell: "curl -sf -b 'connect.sid={{ _gather_netris_cookie.stdout }}' {{ _gather_netris_url }}/api/v2/nat 2>&1 | python3 -m json.tool > {{ _gather_dir }}/netris/nats 2>&1 || echo 'unavailable' > {{ _gather_dir }}/netris/nats"
   changed_when: false
   failed_when: false
 
