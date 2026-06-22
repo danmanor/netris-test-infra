@@ -68,6 +68,23 @@
       fi
       wait_for_resource deployment/${CONSOLE_PROXY_DEPLOY}
 
+- name: Fix operator env var name for latest osac-operator
+  ansible.builtin.replace:
+    path: "{{ osac_installer_dir }}/base/osac-operator/charts/operator/templates/deployment.yaml"
+    regexp: 'OSAC_ENABLE_CLUSTER_ORDER_CONTROLLER'
+    replace: 'OSAC_ENABLE_CLUSTER_CONTROLLER'
+
+- name: Inject AAP token from secret into operator chart template
+  ansible.builtin.shell:
+    cmd: |
+      sed -i '/{{- if .Values.aap.token }}/,/{{- end }}/c\
+          - name: OSAC_AAP_TOKEN\
+            valueFrom:\
+              secretKeyRef:\
+                name: osac-aap-api-token\
+                key: token' {{ osac_installer_dir }}/base/osac-operator/charts/operator/templates/deployment.yaml
+  changed_when: true
+
 - name: Disable bare-metal fulfillment operator
   ansible.builtin.blockinfile:
     path: "{{ osac_installer_dir }}/{{ osac_values_file }}"
