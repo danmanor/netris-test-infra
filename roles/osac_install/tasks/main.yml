@@ -85,36 +85,6 @@
                 key: token' {{ osac_installer_dir }}/base/osac-operator/charts/operator/templates/deployment.yaml
   changed_when: true
 
-- name: Patch MetalLB IPAddressPool for lab environment
-  ansible.builtin.copy:
-    dest: "{{ osac_installer_dir }}/prerequisites/metallb/metallb-config.yaml"
-    content: |
-      apiVersion: metallb.io/v1beta1
-      kind: MetalLB
-      metadata:
-        name: metallb
-        namespace: metallb-system
-      ---
-      apiVersion: metallb.io/v1beta1
-      kind: IPAddressPool
-      metadata:
-        name: caas-address-pool
-        namespace: metallb-system
-      spec:
-        addresses:
-          - {{ ocp_subnet_cidr | ansible.utils.ipaddr('network') | ansible.utils.ipmath(200) }}-{{ ocp_subnet_cidr | ansible.utils.ipaddr('network') | ansible.utils.ipmath(250) }}
-        autoAssign: true
-        avoidBuggyIPs: true
-      ---
-      apiVersion: metallb.io/v1beta1
-      kind: L2Advertisement
-      metadata:
-        name: caas-l2-advertisement
-        namespace: metallb-system
-      spec:
-        ipAddressPools:
-          - caas-address-pool
-
 - name: Disable bare-metal fulfillment operator
   ansible.builtin.blockinfile:
     path: "{{ osac_installer_dir }}/{{ osac_values_file }}"
