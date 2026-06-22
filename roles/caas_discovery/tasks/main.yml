@@ -39,62 +39,31 @@
   when: _os_images_count.stdout | default('0') | int > 1
   block:
 
-    - name: Filter OS_IMAGES and patch ConfigMap, StatefulSet, and restart
+    - name: Filter OS_IMAGES and patch assisted-service ConfigMap and StatefulSet
       ansible.builtin.script:
         cmd: /usr/bin/python3 -
         stdin: |
-          import json, subprocess, time
+          import json, subprocess
 
           def run(cmd):
               r = subprocess.run(cmd, capture_output=True, text=True, check=True)
               return r.stdout
-
-          def get_ss_rhcos_count():
-              ss = json.loads(run(["oc", "get", "statefulset", "assisted-image-service", "-n", "multicluster-engine", "-o", "json"]))
-              env = ss["spec"]["template"]["spec"]["containers"][0]["env"]
-              rhcos = next(e for e in env if e["name"] == "RHCOS_VERSIONS")
-              return len(json.loads(rhcos["value"]))
 
           os_images = json.loads(run(["oc", "get", "configmap", "assisted-service", "-n", "multicluster-engine", "-o", "jsonpath={.data.OS_IMAGES}"]))
           filtered = [i for i in os_images if i["openshift_version"] == "{{ caas_ocp_version }}" and i["cpu_architecture"] == "x86_64"]
           filtered_json = json.dumps(filtered)
           print(f"Filtered OS_IMAGES from {len(os_images)} to {len(filtered)}")
 
-          for attempt in range(5):
-              print(f"Patch attempt {attempt + 1}")
+          patch = json.dumps({"data": {"OS_IMAGES": filtered_json}})
+          run(["oc", "patch", "configmap", "assisted-service", "-n", "multicluster-engine", "--type=merge", "-p", patch])
 
-              # Patch ConfigMap
-              patch = json.dumps({"data": {"OS_IMAGES": filtered_json}})
-              run(["oc", "patch", "configmap", "assisted-service", "-n", "multicluster-engine", "--type=merge", "-p", patch])
-
-              # Patch StatefulSet RHCOS_VERSIONS env
-              ss = json.loads(run(["oc", "get", "statefulset", "assisted-image-service", "-n", "multicluster-engine", "-o", "json"]))
-              idx = next(i for i, e in enumerate(ss["spec"]["template"]["spec"]["containers"][0]["env"]) if e["name"] == "RHCOS_VERSIONS")
-              ss_patch = json.dumps([{"op": "replace", "path": f"/spec/template/spec/containers/0/env/{idx}/value", "value": filtered_json}])
-              with open("/tmp/patch.json", "w") as f:
-                  f.write(ss_patch)
-              run(["oc", "patch", "statefulset", "assisted-image-service", "-n", "multicluster-engine", "--type=json", "--patch-file=/tmp/patch.json"])
-
-              # Delete pod to force recreation from patched spec
-              run(["oc", "delete", "pod", "assisted-image-service-0", "-n", "multicluster-engine", "--ignore-not-found"])
-
-              # Wait for new pod and verify
-              time.sleep(10)
-              for check in range(30):
-                  try:
-                      count = get_ss_rhcos_count()
-                      if count <= len(filtered):
-                          print(f"StatefulSet verified: {count} RHCOS version(s)")
-                          break
-                  except Exception:
-                      pass
-                  time.sleep(5)
-              else:
-                  print("StatefulSet was reverted, retrying...")
-                  continue
-              break
-          else:
-              print("WARNING: Could not persist OS_IMAGES filter after 5 attempts")
+          ss = json.loads(run(["oc", "get", "statefulset", "assisted-image-service", "-n", "multicluster-engine", "-o", "json"]))
+          idx = next(i for i, e in enumerate(ss["spec"]["template"]["spec"]["containers"][0]["env"]) if e["name"] == "RHCOS_VERSIONS")
+          ss_patch = json.dumps([{"op": "replace", "path": f"/spec/template/spec/containers/0/env/{idx}/value", "value": filtered_json}])
+          with open("/tmp/patch.json", "w") as f:
+              f.write(ss_patch)
+          run(["oc", "patch", "statefulset", "assisted-image-service", "-n", "multicluster-engine", "--type=json", "--patch-file=/tmp/patch.json"])
+          print("Patched ConfigMap and StatefulSet")
       environment:
         KUBECONFIG: /root/.kube/config
       changed_when: true
@@ -112,6 +81,13 @@
       environment:
         KUBECONFIG: /root/.kube/config
       changed_when: false
+
+    - name: Delete assisted-image-service pod to pick up patched spec
+      ansible.builtin.command:
+        cmd: oc delete pod assisted-image-service-0 -n multicluster-engine --ignore-not-found
+      environment:
+        KUBECONFIG: /root/.kube/config
+      changed_when: true
 
     - name: Wait for assisted-image-service pod ready
       ansible.builtin.shell:
