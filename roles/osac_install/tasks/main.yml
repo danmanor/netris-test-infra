@@ -127,17 +127,6 @@
     state: directory
     mode: "0755"
 
-- name: Apply capi-provider-role from kustomize overlay (not included in Helm mode)
-  ansible.builtin.command:
-    cmd: oc apply -f {{ osac_installer_dir }}/overlays/{{ osac_kustomize_overlay }}/capi-provider-role.yaml
-  environment:
-    KUBECONFIG: /root/.kube/config
-  register: _capi_role
-  changed_when: "'created' in _capi_role.stdout or 'configured' in _capi_role.stdout"
-  until: _capi_role.rc == 0
-  retries: 5
-  delay: 10
-
 - name: Create placeholder secrets for bmf-operator
   ansible.builtin.shell:
     cmd: >
