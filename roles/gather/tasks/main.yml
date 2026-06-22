@@ -3,318 +3,200 @@
   ansible.builtin.include_vars:
     file: "{{ netris_lab_dir }}/group_vars/all.yml"
 
+- name: Set gather directory
+  ansible.builtin.set_fact:
+    _gather_dir: "/var/log/netris-gather/{{ ansible_date_time.iso8601_basic_short }}"
+
+- name: Create gather subdirectories
+  ansible.builtin.file:
+    path: "{{ _gather_dir }}/{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - host
+    - networking
+    - libvirt
+    - k3s
+    - netris
+    - openvpn
+    - socat
+    - assisted-installer
+    - ocp
+    - osac
+    - systemd
+    - journal
+
 # ── Host ──
 - name: Gather uptime
-  ansible.builtin.command: uptime
-  register: _host_uptime
+  ansible.builtin.shell: uptime > {{ _gather_dir }}/host/uptime 2>&1
   changed_when: false
   failed_when: false
 
 - name: Gather memory usage
-  ansible.builtin.command: free -h
-  register: _host_memory
+  ansible.builtin.shell: free -h > {{ _gather_dir }}/host/memory 2>&1
   changed_when: false
   failed_when: false
 
 - name: Gather disk usage
-  ansible.builtin.command: df -h
-  register: _host_disk
+  ansible.builtin.shell: df -h > {{ _gather_dir }}/host/disk 2>&1
   changed_when: false
   failed_when: false
 
 - name: Gather CPU info
-  ansible.builtin.shell: lscpu | head -20
-  register: _host_cpu
+  ansible.builtin.shell: lscpu > {{ _gather_dir }}/host/cpu 2>&1
   changed_when: false
   failed_when: false
 
 - name: Gather OS and kernel
-  ansible.builtin.shell: uname -a && cat /etc/os-release
-  register: _host_os
+  ansible.builtin.shell: "{ uname -a; echo; cat /etc/os-release; } > {{ _gather_dir }}/host/os 2>&1"
   changed_when: false
   failed_when: false
 
 # ── Networking ──
 - name: Gather br-mgmt status
-  ansible.builtin.shell: ip -d link show {{ mgmt_bridge_name }} 2>/dev/null || echo "not found"
-  register: _net_br_mgmt
+  ansible.builtin.shell: ip -d link show {{ mgmt_bridge_name }} > {{ _gather_dir }}/networking/br-mgmt 2>&1 || echo "not found" > {{ _gather_dir }}/networking/br-mgmt
   changed_when: false
   failed_when: false
 
 - name: Gather br-public status
-  ansible.builtin.shell: ip -d link show {{ public_bridge_name }} 2>/dev/null || echo "not found"
-  register: _net_br_public
+  ansible.builtin.shell: ip -d link show {{ public_bridge_name }} > {{ _gather_dir }}/networking/br-public 2>&1 || echo "not found" > {{ _gather_dir }}/networking/br-public
   changed_when: false
   failed_when: false
 
 - name: Gather IP addresses
-  ansible.builtin.command: ip -4 addr show
-  register: _net_addrs
+  ansible.builtin.shell: ip -4 addr show > {{ _gather_dir }}/networking/ip-addresses 2>&1
   changed_when: false
   failed_when: false
 
 - name: Gather routes
-  ansible.builtin.command: ip route show
-  register: _net_routes
+  ansible.builtin.shell: ip route show > {{ _gather_dir }}/networking/routes 2>&1
   changed_when: false
   failed_when: false
 
 - name: Gather iptables rules
-  ansible.builtin.shell: iptables-save 2>/dev/null || echo "iptables not available"
-  register: _net_iptables
+  ansible.builtin.shell: iptables-save > {{ _gather_dir }}/networking/iptables 2>&1 || echo "iptables not available" > {{ _gather_dir }}/networking/iptables
   changed_when: false
   failed_when: false
 
 - name: Gather nftables ruleset
-  ansible.builtin.shell: nft list ruleset 2>/dev/null || echo "nftables not available"
-  register: _net_nftables
+  ansible.builtin.shell: nft list ruleset > {{ _gather_dir }}/networking/nftables 2>&1 || echo "nftables not available" > {{ _gather_dir }}/networking/nftables
   changed_when: false
   failed_when: false
 
 # ── Libvirt/KVM ──
 - name: Gather VM list
-  ansible.builtin.command: virsh list --all
-  register: _virt_list
+  ansible.builtin.shell: virsh list --all > {{ _gather_dir }}/libvirt/vm-list 2>&1
   changed_when: false
   failed_when: false
 
 # ── K3s ──
 - name: Gather K3s nodes
-  ansible.builtin.command: kubectl get nodes -o wide
+  ansible.builtin.shell: kubectl get nodes -o wide > {{ _gather_dir }}/k3s/nodes 2>&1
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-  register: _k3s_nodes
   changed_when: false
   failed_when: false
 
 - name: Gather K3s pods (all namespaces)
-  ansible.builtin.command: kubectl get pods --all-namespaces -o wide
+  ansible.builtin.shell: kubectl get pods --all-namespaces -o wide > {{ _gather_dir }}/k3s/pods-all 2>&1
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-  register: _k3s_pods
   changed_when: false
   failed_when: false
 
 - name: Gather Netris controller pods
-  ansible.builtin.command: kubectl get pods -n netris-controller -o wide
+  ansible.builtin.shell: kubectl get pods -n netris-controller -o wide > {{ _gather_dir }}/k3s/pods-netris-controller 2>&1
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-  register: _k3s_netris_pods
   changed_when: false
   failed_when: false
 
 # ── Netris controller API ──
 - name: Check Netris controller API
-  ansible.builtin.shell: curl -sf -o /dev/null -w "%{http_code}" http://localhost:{{ controller_ui_port }} || echo "unreachable"
-  register: _netris_api
+  ansible.builtin.shell: "curl -sf -o /dev/null -w '%{http_code}' http://localhost:{{ controller_ui_port }} > {{ _gather_dir }}/netris/api-status 2>&1 || echo 'unreachable' > {{ _gather_dir }}/netris/api-status"
   changed_when: false
   failed_when: false
 
 # ── OpenVPN ──
 - name: Gather tun0 interface
-  ansible.builtin.shell: ip addr show tun0 2>/dev/null || echo "tun0 not found"
-  register: _vpn_tun0
+  ansible.builtin.shell: ip addr show tun0 > {{ _gather_dir }}/openvpn/tun0 2>&1 || echo "tun0 not found" > {{ _gather_dir }}/openvpn/tun0
   changed_when: false
   failed_when: false
 
 # ── socat forwarders ──
 - name: Gather socat forwarder units
-  ansible.builtin.shell: systemctl list-units 'socat-forwarder@*' --all --no-pager 2>/dev/null || echo "no units"
-  register: _socat_units
+  ansible.builtin.shell: systemctl list-units 'socat-forwarder@*' --all --no-pager > {{ _gather_dir }}/socat/forwarder-units 2>&1 || echo "no units" > {{ _gather_dir }}/socat/forwarder-units
   changed_when: false
   failed_when: false
 
 # ── Assisted Installer ──
 - name: Check Assisted Installer API
-  ansible.builtin.shell: curl -sf -o /dev/null -w "%{http_code}" {{ assisted_service_url }}/api/assisted-install/v2/clusters || echo "unreachable"
-  register: _ai_reachable
+  ansible.builtin.shell: "curl -sf -o /dev/null -w '%{http_code}' {{ assisted_service_url }}/api/assisted-install/v2/clusters > {{ _gather_dir }}/assisted-installer/api-status 2>&1 || echo 'unreachable' > {{ _gather_dir }}/assisted-installer/api-status"
   changed_when: false
   failed_when: false
 
 - name: Gather Assisted Installer clusters
-  ansible.builtin.shell: aicli -u {{ assisted_service_url }} list cluster 2>/dev/null || echo "aicli unavailable"
-  register: _ai_clusters
+  ansible.builtin.shell: aicli -u {{ assisted_service_url }} list cluster > {{ _gather_dir }}/assisted-installer/clusters 2>&1 || echo "aicli unavailable" > {{ _gather_dir }}/assisted-installer/clusters
   changed_when: false
   failed_when: false
 
 # ── OCP cluster ──
 - name: Gather OCP nodes
-  ansible.builtin.shell: oc get nodes -o wide 2>/dev/null || echo "OCP not reachable"
+  ansible.builtin.shell: oc get nodes -o wide > {{ _gather_dir }}/ocp/nodes 2>&1 || echo "OCP not reachable" > {{ _gather_dir }}/ocp/nodes
   environment:
     KUBECONFIG: /root/.kube/config
-  register: _ocp_nodes
   changed_when: false
   failed_when: false
 
 - name: Gather OCP cluster operators
-  ansible.builtin.shell: oc get clusteroperators 2>/dev/null || echo "cluster operators unavailable"
+  ansible.builtin.shell: oc get clusteroperators > {{ _gather_dir }}/ocp/cluster-operators 2>&1 || echo "cluster operators unavailable" > {{ _gather_dir }}/ocp/cluster-operators
   environment:
     KUBECONFIG: /root/.kube/config
-  register: _ocp_cos
   changed_when: false
   failed_when: false
 
 - name: Gather OSAC namespace pods
-  ansible.builtin.shell: oc get pods -n {{ osac_namespace }} -o wide 2>/dev/null || echo "OSAC namespace not found"
+  ansible.builtin.shell: oc get pods -n {{ osac_namespace }} -o wide > {{ _gather_dir }}/ocp/pods-osac 2>&1 || echo "OSAC namespace not found" > {{ _gather_dir }}/ocp/pods-osac
   environment:
     KUBECONFIG: /root/.kube/config
-  register: _ocp_osac_pods
   changed_when: false
   failed_when: false
 
 # ── OSAC ──
 - name: Gather OSAC Helm releases
-  ansible.builtin.shell: helm list -n {{ osac_namespace }} 2>/dev/null || echo "no helm releases"
+  ansible.builtin.shell: helm list -n {{ osac_namespace }} > {{ _gather_dir }}/osac/helm-releases 2>&1 || echo "no helm releases" > {{ _gather_dir }}/osac/helm-releases
   environment:
     KUBECONFIG: /root/.kube/config
-  register: _osac_helm
   changed_when: false
   failed_when: false
 
 - name: Gather OSAC deployments
-  ansible.builtin.shell: oc get deployments -n {{ osac_namespace }} 2>/dev/null || echo "no deployments"
+  ansible.builtin.shell: oc get deployments -n {{ osac_namespace }} > {{ _gather_dir }}/osac/deployments 2>&1 || echo "no deployments" > {{ _gather_dir }}/osac/deployments
   environment:
     KUBECONFIG: /root/.kube/config
-  register: _osac_deployments
   changed_when: false
   failed_when: false
 
 # ── systemd ──
 - name: Gather failed systemd units
-  ansible.builtin.command: systemctl --failed --no-pager
-  register: _systemd_failed
+  ansible.builtin.shell: systemctl --failed --no-pager > {{ _gather_dir }}/systemd/failed-units 2>&1
   changed_when: false
   failed_when: false
 
 # ── Journal ──
 - name: Gather recent journal errors
-  ansible.builtin.command: journalctl -p err --no-pager -n 100
-  register: _journal_errors
+  ansible.builtin.shell: journalctl -p err --no-pager -n 100 > {{ _gather_dir }}/journal/errors 2>&1
   changed_when: false
   failed_when: false
 
-# ── Output ──
-- name: Build gather report
-  ansible.builtin.set_fact:
-    _gather_report: |
-      ============================================================
-      DIAGNOSTIC GATHER — {{ ansible_date_time.iso8601 }}
-      ============================================================
-
-      ================ HOST ================
-      --- Uptime ---
-      {{ _host_uptime.stdout | default('unavailable') }}
-
-      --- Memory ---
-      {{ _host_memory.stdout | default('unavailable') }}
-
-      --- Disk ---
-      {{ _host_disk.stdout | default('unavailable') }}
-
-      --- CPU ---
-      {{ _host_cpu.stdout | default('unavailable') }}
-
-      --- OS / Kernel ---
-      {{ _host_os.stdout | default('unavailable') }}
-
-      ================ NETWORKING ================
-      --- br-mgmt ---
-      {{ _net_br_mgmt.stdout | default('unavailable') }}
-
-      --- br-public ---
-      {{ _net_br_public.stdout | default('unavailable') }}
-
-      --- IP Addresses ---
-      {{ _net_addrs.stdout | default('unavailable') }}
-
-      --- Routes ---
-      {{ _net_routes.stdout | default('unavailable') }}
-
-      --- iptables ---
-      {{ _net_iptables.stdout | default('unavailable') }}
-
-      --- nftables ---
-      {{ _net_nftables.stdout | default('unavailable') }}
-
-      ================ LIBVIRT/KVM ================
-      {{ _virt_list.stdout | default('unavailable') }}
-
-      ================ K3S ================
-      --- Nodes ---
-      {{ _k3s_nodes.stdout | default('unavailable') }}
-
-      --- All Pods ---
-      {{ _k3s_pods.stdout | default('unavailable') }}
-
-      --- Netris Controller Pods ---
-      {{ _k3s_netris_pods.stdout | default('unavailable') }}
-
-      ================ NETRIS CONTROLLER ================
-      API (port {{ controller_ui_port }}): {{ _netris_api.stdout | default('unavailable') }}
-
-      ================ OPENVPN ================
-      {{ _vpn_tun0.stdout | default('unavailable') }}
-
-      ================ SOCAT FORWARDERS ================
-      {{ _socat_units.stdout | default('unavailable') }}
-
-      ================ ASSISTED INSTALLER ================
-      API ({{ assisted_service_url }}): {{ _ai_reachable.stdout | default('unavailable') }}
-
-      --- Clusters ---
-      {{ _ai_clusters.stdout | default('unavailable') }}
-
-      ================ OCP CLUSTER ================
-      --- Nodes ---
-      {{ _ocp_nodes.stdout | default('unavailable') }}
-
-      --- Cluster Operators ---
-      {{ _ocp_cos.stdout | default('unavailable') }}
-
-      --- Pods in {{ osac_namespace }} ---
-      {{ _ocp_osac_pods.stdout | default('unavailable') }}
-
-      ================ OSAC ================
-      --- Helm Releases ---
-      {{ _osac_helm.stdout | default('unavailable') }}
-
-      --- Deployments ---
-      {{ _osac_deployments.stdout | default('unavailable') }}
-
-      ================ SYSTEMD ================
-      --- Failed Units ---
-      {{ _systemd_failed.stdout | default('unavailable') }}
-
-      ================ JOURNAL ERRORS (last 100) ================
-      {{ _journal_errors.stdout | default('unavailable') }}
-
-      ============================================================
-      END DIAGNOSTIC GATHER
-      ============================================================
-
-- name: Ensure gather log directory exists
-  ansible.builtin.file:
-    path: /var/log/netris-gather
-    state: directory
-    mode: "0755"
-
-- name: Write gather report to file
-  ansible.builtin.copy:
-    content: "{{ _gather_report }}"
-    dest: "/var/log/netris-gather/gather-{{ ansible_date_time.iso8601_basic_short }}.log"
-    mode: "0644"
-
+# ── Symlink + report ──
 - name: Create latest symlink
   ansible.builtin.file:
-    src: "/var/log/netris-gather/gather-{{ ansible_date_time.iso8601_basic_short }}.log"
-    dest: /var/log/netris-gather/latest.log
+    src: "{{ _gather_dir }}"
+    dest: /var/log/netris-gather/latest
     state: link
     force: true
 
-- name: Print gather report
+- name: Print gather location
   ansible.builtin.debug:
-    msg: "{{ _gather_report }}"
-
-- name: Print report location
-  ansible.builtin.debug:
-    msg: "Report saved to /var/log/netris-gather/gather-{{ ansible_date_time.iso8601_basic_short }}.log (symlinked at /var/log/netris-gather/latest.log)"
+    msg: "Diagnostics saved to {{ _gather_dir }} (symlinked at /var/log/netris-gather/latest)"
