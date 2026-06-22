@@ -23,6 +23,13 @@
     ip link set dev {{ public_bridge_name }} up
   changed_when: false
 
+- name: Disable reverse path filtering on br-public (isolated mode)
+  when: connectivity_mode == "isolated"
+  ansible.posix.sysctl:
+    name: "net.ipv4.conf.{{ public_bridge_name }}.rp_filter"
+    value: "0"
+    sysctl_set: true
+
 - name: Deploy K3s and Netris controller
   ansible.builtin.include_role:
     name: k3s_controller
