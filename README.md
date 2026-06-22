@@ -162,7 +162,7 @@ Then browse to `https://osac-aap-osac-devel.apps.ocp-sno.osac.local:9444` (accep
 |---------|-----|
 | AAP UI | `https://osac-aap-osac-devel.apps.ocp-sno.osac.local:9444` |
 | OCP Console | `https://console-openshift-console.apps.ocp-sno.osac.local:9444` |
-| Assisted Installer | `http://<server-ip>:8080` |
+| Assisted Installer UI | `http://<server-ip>:8080` |
 | Netris Controller | `http://<server-ip>:9443` |
 
 ## How deploy-osac Works
