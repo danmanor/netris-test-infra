@@ -86,6 +86,37 @@
     nat_destination_address: "{{ ocp_dnat_ip }}/32"
     nat_dnat_to_ip: "{{ ocp_node_ip }}"
 
+- name: Check if NS-only server cluster template exists
+  ansible.builtin.uri:
+    url: "{{ netris_controller_url }}/api/v2/server-cluster-template"
+    method: GET
+    headers:
+      Cookie: "connect.sid={{ netris_session_cookie }}"
+    return_content: true
+    validate_certs: false
+  register: _sct_list
+
+- name: Create NS-only server cluster template for CaaS
+  ansible.builtin.uri:
+    url: "{{ netris_controller_url }}/api/v2/server-cluster-template"
+    method: POST
+    headers:
+      Cookie: "connect.sid={{ netris_session_cookie }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      name: "{{ caas_server_cluster_template_name }}"
+      vnets:
+        - postfix: "North-South"
+          type: "l2vpn"
+          vlan: "untagged"
+          vlanID: "auto"
+          serverNics: ["eth9", "eth10"]
+          ipv4Gateway: "192.168.7.254/21"
+    validate_certs: false
+    status_code: [200, 201]
+  when: _sct_list.json.data | selectattr('name', 'equalto', caas_server_cluster_template_name) | list | length == 0
+
 - name: Report Netris networking configuration
   ansible.builtin.debug:
     msg: "Netris configured: VPC={{ ocp_vpc_name }}, VNet={{ ocp_vnet_name }}, Subnet={{ ocp_subnet_cidr }}, DNAT={{ ocp_dnat_ip }} → {{ ocp_node_ip }}"

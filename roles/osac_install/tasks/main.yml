@@ -226,7 +226,7 @@
 
 - name: Set server cluster template ID
   ansible.builtin.set_fact:
-    _netris_sct_id: "{{ netris_sct_by_name['server-cluster-template'].id }}"
+    _netris_sct_id: "{{ netris_sct_by_name[caas_server_cluster_template_name].id }}"
 
 - name: Build resource class map
   ansible.builtin.set_fact:
