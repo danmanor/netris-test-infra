@@ -12,7 +12,7 @@
 
 - name: Wait for MCE operator pods to terminate
   ansible.builtin.shell:
-    cmd: oc get pods -n multicluster-engine -l app={{ item }} --no-headers 2>/dev/null | grep -v Terminating | wc -l
+    cmd: oc get pods -n multicluster-engine -l control-plane={{ item }} --no-headers 2>/dev/null | grep -v Terminating | wc -l
   environment:
     KUBECONFIG: /root/.kube/config
   register: _mce_pods
@@ -23,7 +23,7 @@
   failed_when: false
   loop:
     - infrastructure-operator
-    - multicluster-engine-operator
+    - backplane-operator
 
 - name: Check if OS_IMAGES is already filtered
   ansible.builtin.shell:
