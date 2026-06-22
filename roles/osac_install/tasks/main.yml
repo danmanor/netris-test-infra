@@ -289,9 +289,9 @@
 - name: Start socat forward for OCP ingress (port 9444 → OCP 443)
   ansible.builtin.shell:
     cmd: |
-      pkill -f 'socat.*TCP-LISTEN:9444.*198.51.100.2' 2>/dev/null || true
-      socat TCP-LISTEN:9444,fork,reuseaddr TCP:{{ ocp_dnat_ip }}:443 &
-      disown
+      pkill -f 'socat.*TCP-LISTEN:9444.*{{ ocp_dnat_ip }}' 2>/dev/null || true
+      sleep 1
+      nohup socat TCP-LISTEN:9444,fork,reuseaddr TCP:{{ ocp_dnat_ip }}:443 </dev/null >/dev/null 2>&1 &
   changed_when: false
 
 - name: Report OSAC preparation complete
