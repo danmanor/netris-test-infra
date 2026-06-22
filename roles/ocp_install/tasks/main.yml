@@ -209,6 +209,30 @@
     - _cluster_status.stdout | trim not in ['installed', 'installing', 'finalizing']
   changed_when: true
 
+- name: Write KubeletConfig manifest for maxPods
+  ansible.builtin.copy:
+    content: |
+      apiVersion: machineconfiguration.openshift.io/v1
+      kind: KubeletConfig
+      metadata:
+        name: increase-max-pods
+      spec:
+        kubeletConfig:
+          maxPods: 500
+        machineConfigPoolSelector:
+          matchLabels:
+            pools.operator.machineconfiguration.openshift.io/master: ""
+    dest: /tmp/kubelet-max-pods.yaml
+    mode: "0644"
+
+- name: Inject KubeletConfig manifest into cluster
+  ansible.builtin.command:
+    cmd: aicli -u {{ assisted_service_url }} create manifest {{ ocp_cluster_name }} -f /tmp/kubelet-max-pods.yaml
+  when: _cluster_status.stdout | trim not in ['installed', 'installing', 'finalizing']
+  register: _manifest_create
+  changed_when: true
+  failed_when: false
+
 - name: Wait for host discovery
   ansible.builtin.command:
     cmd: aicli -u {{ assisted_service_url }} wait cluster {{ ocp_cluster_name }} --status ready
