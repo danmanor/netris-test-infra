@@ -138,6 +138,35 @@
   retries: 30
   delay: 30
 
+- name: Create manifests directory
+  ansible.builtin.file:
+    path: /tmp/ocp-extra-manifests
+    state: directory
+    mode: "0755"
+
+- name: Write KubeletConfig manifest for maxPods
+  ansible.builtin.copy:
+    content: |
+      apiVersion: machineconfiguration.openshift.io/v1
+      kind: KubeletConfig
+      metadata:
+        name: increase-max-pods
+      spec:
+        kubeletConfig:
+          maxPods: 500
+        machineConfigPoolSelector:
+          matchLabels:
+            pools.operator.machineconfiguration.openshift.io/master: ""
+    dest: /tmp/ocp-extra-manifests/kubelet-max-pods.yaml
+    mode: "0644"
+
+- name: Inject extra manifests into cluster
+  ansible.builtin.command:
+    cmd: aicli -u {{ assisted_service_url }} create manifest {{ ocp_cluster_name }} --dir /tmp/ocp-extra-manifests
+  register: _manifest_create
+  changed_when: true
+  failed_when: false
+
 - name: Check cluster status
   ansible.builtin.shell:
     cmd: "aicli -u {{ assisted_service_url }} info cluster {{ ocp_cluster_name }} | grep '^status:' | awk '{print $2}'"
@@ -208,30 +237,6 @@
     - _vm_state.stdout | trim != 'running'
     - _cluster_status.stdout | trim not in ['installed', 'installing', 'finalizing']
   changed_when: true
-
-- name: Write KubeletConfig manifest for maxPods
-  ansible.builtin.copy:
-    content: |
-      apiVersion: machineconfiguration.openshift.io/v1
-      kind: KubeletConfig
-      metadata:
-        name: increase-max-pods
-      spec:
-        kubeletConfig:
-          maxPods: 500
-        machineConfigPoolSelector:
-          matchLabels:
-            pools.operator.machineconfiguration.openshift.io/master: ""
-    dest: /tmp/kubelet-max-pods.yaml
-    mode: "0644"
-
-- name: Inject KubeletConfig manifest into cluster
-  ansible.builtin.command:
-    cmd: aicli -u {{ assisted_service_url }} create manifest {{ ocp_cluster_name }} -f /tmp/kubelet-max-pods.yaml
-  when: _cluster_status.stdout | trim not in ['installed', 'installing', 'finalizing']
-  register: _manifest_create
-  changed_when: true
-  failed_when: false
 
 - name: Wait for host discovery
   ansible.builtin.command:
