@@ -125,27 +125,19 @@
       ssh -o StrictHostKeyChecking=no root@192.168.16.1 "
         changed=false
 
-        # Install dnsmasq if missing
-        if ! command -v dnsmasq &>/dev/null; then
-          apt-get update -qq && apt-get install -y -qq dnsmasq >/dev/null 2>&1
-          changed=true
-        fi
-
-        # Disable systemd-resolved stub listener to free port 53
-        if [ -f /etc/systemd/resolved.conf ]; then
-          if ! grep -q '^DNSStubListener=no' /etc/systemd/resolved.conf; then
-            sed -i 's/^#\?DNSStubListener=.*/DNSStubListener=no/' /etc/systemd/resolved.conf
-            systemctl restart systemd-resolved
-            changed=true
-          fi
-        fi
-
-        # Add OCP DNS entries to dnsmasq
+        # Add OCP DNS entries to cloud-init dnsmasq
         mkdir -p /etc/dnsmasq.d
         DESIRED='address=/api.{{ ocp_cluster_name }}.{{ ocp_base_domain }}/{{ ocp_dnat_ip }}
       address=/.apps.{{ ocp_cluster_name }}.{{ ocp_base_domain }}/{{ ocp_dnat_ip }}'
         if [ ! -f /etc/dnsmasq.d/ocp-sno.conf ] || [ \"\$(cat /etc/dnsmasq.d/ocp-sno.conf)\" != \"\$DESIRED\" ]; then
           echo \"\$DESIRED\" > /etc/dnsmasq.d/ocp-sno.conf
+          changed=true
+        fi
+
+        # Ensure dnsmasq has upstream resolvers
+        mkdir -p /run/dnsmasq
+        if [ ! -f /run/dnsmasq/resolv.conf ] || ! grep -q '8.8.8.8' /run/dnsmasq/resolv.conf; then
+          echo 'nameserver 8.8.8.8' > /run/dnsmasq/resolv.conf
           changed=true
         fi
 
@@ -158,9 +150,8 @@
           changed=true
         fi
 
-        # Ensure dnsmasq is running
-        systemctl enable dnsmasq
-        systemctl restart dnsmasq
+        # Reload dnsmasq to pick up new config
+        pkill -HUP dnsmasq 2>/dev/null || true
 
         echo \$changed
       "
