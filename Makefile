@@ -31,7 +31,12 @@ run-osac-setup:
 	@echo "=== Rebuilding Helm chart dependencies ==="
 	cd /opt/osac-installer && git submodule update --init --recursive --remote && helm dependency update charts/osac/
 	@echo "=== Running OSAC setup.sh with live output ==="
-	cd /opt/osac-installer && source /tmp/osac-setup.env && ./scripts/setup.sh
+	@for attempt in 1 2 3; do \
+		echo "--- Attempt $$attempt of 3 ---"; \
+		cd /opt/osac-installer && source /tmp/osac-setup.env && ./scripts/setup.sh && break; \
+		if [ $$attempt -eq 3 ]; then echo "setup.sh failed after 3 attempts"; exit 1; fi; \
+		echo "setup.sh failed, retrying in 3 minutes..."; sleep 180; \
+	done
 
 # Per-flow targets — run after deploy
 setup-caas:
