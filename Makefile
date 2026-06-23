@@ -31,10 +31,10 @@ run-osac-setup:
 	@echo "=== Rebuilding Helm chart dependencies ==="
 	cd /opt/osac-installer && git submodule update --init --recursive --remote && helm dependency update charts/osac/
 	@echo "=== Running OSAC setup.sh with live output ==="
-	@for attempt in 1 2 3; do \
-		echo "--- Attempt $$attempt of 3 ---"; \
+	@for attempt in $$(seq 1 10); do \
+		echo "--- Attempt $$attempt of 10 ---"; \
 		cd /opt/osac-installer && source /tmp/osac-setup.env && ./scripts/setup.sh && break; \
-		if [ $$attempt -eq 3 ]; then echo "setup.sh failed after 3 attempts"; exit 1; fi; \
+		if [ $$attempt -eq 10 ]; then echo "setup.sh failed after 10 attempts"; exit 1; fi; \
 		echo "setup.sh failed, retrying in 3 minutes..."; sleep 180; \
 	done
 
