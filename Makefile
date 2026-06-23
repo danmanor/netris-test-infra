@@ -29,7 +29,7 @@ prep-osac:
 
 run-osac-setup:
 	@echo "=== Rebuilding Helm chart dependencies ==="
-	cd /opt/osac-installer && git submodule update --init --recursive --remote && helm dependency update charts/osac/
+	cd /opt/osac-installer && helm dependency update charts/osac/
 	@echo "=== Running OSAC setup.sh with live output ==="
 	@for attempt in $$(seq 1 10); do \
 		echo "--- Attempt $$attempt of 10 ---"; \

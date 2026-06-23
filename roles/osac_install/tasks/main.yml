@@ -37,7 +37,7 @@
 
 - name: Initialize submodules
   ansible.builtin.command:
-    cmd: git submodule update --init --recursive --remote
+    cmd: git submodule update --init --recursive
     chdir: "{{ osac_installer_dir }}"
   register: _submodule_update
   changed_when: _submodule_update.stdout | length > 0
@@ -144,6 +144,21 @@
   changed_when: false
   register: _secrets_result
   until: _secrets_result.rc == 0
+  retries: 10
+  delay: 15
+
+- name: Create placeholder AAP API token secret
+  ansible.builtin.shell:
+    cmd: >
+      oc create secret generic osac-aap-api-token
+      --from-literal=token=placeholder
+      -n {{ osac_namespace }}
+      --dry-run=client -o yaml | oc apply -f -
+  environment:
+    KUBECONFIG: /root/.kube/config
+  changed_when: false
+  register: _aap_token_result
+  until: _aap_token_result.rc == 0
   retries: 10
   delay: 15
 
