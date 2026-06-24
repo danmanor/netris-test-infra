@@ -39,9 +39,7 @@ Internet access for OCP image pulls flows through: hgx-00 → NS VNet → softga
 - **Netris license key** — place at repo root as `license.key`
 - **OSAC/AAP license** — place at repo root as `license.zip`
 - **OpenShift pull secret** — place at `/root/pull-secret` (or set `pull_secret_path`; download from [console.redhat.com](https://console.redhat.com/openshift/downloads))
-- **SSH key pair** — `ssh-keygen` at `/root/.ssh/id_rsa` (public key is injected into OCP nodes and used for Netris server SSH access)
-
-All system packages and tools are installed automatically by `make setup`. A pre-flight check validates all required files, KVM support, and minimum memory before deploying.
+All system packages, tools, and SSH keys are installed automatically by `make setup`. A pre-flight check validates all required files, KVM support, and minimum memory before deploying.
 
 ## Quick Start
 
