@@ -30,10 +30,12 @@
         - backplane-operator
 
     - name: Filter OS_IMAGES and patch assisted-service ConfigMap and StatefulSet
-      ansible.builtin.script:
-        cmd: /usr/bin/python3 -
-        stdin: |
-          import json, subprocess
+      ansible.builtin.shell:
+        cmd: |
+          python3 << 'PYEOF'
+          import json, subprocess, os
+
+          os.environ["KUBECONFIG"] = "/root/.kube/config"
 
           def run(cmd):
               r = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -42,17 +44,17 @@
           os_images = json.loads(run(["oc", "get", "configmap", "assisted-service", "-n", "multicluster-engine", "-o", "jsonpath={.data.OS_IMAGES}"]))
           filtered = [i for i in os_images if i["openshift_version"] == "{{ caas_ocp_version }}" and i["cpu_architecture"] == "x86_64"]
           if len(filtered) == len(os_images) and len(os_images) <= 1:
-              print(f"OS_IMAGES already filtered ({len(os_images)} entries, all match)")
+              print("OS_IMAGES already filtered (%d entries, all match)" % len(os_images))
           else:
               filtered_json = json.dumps(filtered)
-              print(f"Filtered OS_IMAGES from {len(os_images)} to {len(filtered)}")
+              print("Filtered OS_IMAGES from %d to %d" % (len(os_images), len(filtered)))
 
               patch = json.dumps({"data": {"OS_IMAGES": filtered_json}})
               run(["oc", "patch", "configmap", "assisted-service", "-n", "multicluster-engine", "--type=merge", "-p", patch])
 
               ss = json.loads(run(["oc", "get", "statefulset", "assisted-image-service", "-n", "multicluster-engine", "-o", "json"]))
               idx = next(i for i, e in enumerate(ss["spec"]["template"]["spec"]["containers"][0]["env"]) if e["name"] == "RHCOS_VERSIONS")
-              ss_patch = json.dumps([{"op": "replace", "path": f"/spec/template/spec/containers/0/env/{idx}/value", "value": filtered_json}])
+              ss_patch = json.dumps([{"op": "replace", "path": "/spec/template/spec/containers/0/env/%d/value" % idx, "value": filtered_json}])
               with open("/tmp/patch.json", "w") as f:
                   f.write(ss_patch)
               run(["oc", "patch", "statefulset", "assisted-image-service", "-n", "multicluster-engine", "--type=json", "--patch-file=/tmp/patch.json"])
@@ -63,6 +65,7 @@
 
               run(["oc", "delete", "pod", "assisted-image-service-0", "-n", "multicluster-engine", "--ignore-not-found"])
               print("Deleted assisted-image-service pod")
+          PYEOF
       environment:
         KUBECONFIG: /root/.kube/config
       changed_when: "'Patched' in _filter_result.stdout"
