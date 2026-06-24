@@ -41,7 +41,7 @@
 
           os_images = json.loads(run(["oc", "get", "configmap", "assisted-service", "-n", "multicluster-engine", "-o", "jsonpath={.data.OS_IMAGES}"]))
           filtered = [i for i in os_images if i["openshift_version"] == "{{ caas_ocp_version }}" and i["cpu_architecture"] == "x86_64"]
-          if len(filtered) == len(os_images):
+          if len(filtered) == len(os_images) and len(os_images) <= 1:
               print(f"OS_IMAGES already filtered ({len(os_images)} entries, all match)")
           else:
               filtered_json = json.dumps(filtered)
