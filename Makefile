@@ -1,7 +1,7 @@
 .PHONY: deploy setup deploy-lab deploy-ocp deploy-osac setup-caas deploy-caas \
        deploy-vmaas deploy-bmaas \
        destroy destroy-osac destroy-ocp destroy-caas destroy-vmaas destroy-bmaas \
-       connectivity prep-osac run-osac-setup vendor-update lint gather
+       connectivity prep-osac run-osac-setup post-osac vendor-update lint gather
 
 EXTRA_VARS ?=
 ANSIBLE_EXTRA = $(if $(EXTRA_VARS),-e '$(EXTRA_VARS)')
@@ -22,7 +22,7 @@ deploy-ocp:
 	ansible-playbook playbooks/setup-ocp.yml $(ANSIBLE_EXTRA)
 	ansible-playbook playbooks/install-ocp.yml $(ANSIBLE_EXTRA)
 
-deploy-osac: prep-osac run-osac-setup
+deploy-osac: prep-osac run-osac-setup post-osac
 
 prep-osac:
 	ansible-playbook playbooks/install-osac.yml $(ANSIBLE_EXTRA)
@@ -37,6 +37,9 @@ run-osac-setup:
 		if [ $$attempt -eq 10 ]; then echo "setup.sh failed after 10 attempts"; exit 1; fi; \
 		echo "setup.sh failed, retrying in 3 minutes..."; sleep 180; \
 	done
+
+post-osac:
+	ansible-playbook playbooks/post-osac.yml $(ANSIBLE_EXTRA)
 
 # Per-flow targets — run after deploy
 setup-caas:
