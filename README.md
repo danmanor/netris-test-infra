@@ -39,6 +39,7 @@ Internet access for OCP image pulls flows through: hgx-00 → NS VNet → softga
 - **Netris license key** — place at repo root as `license.key`
 - **OSAC/AAP license** — place at repo root as `license.zip`
 - **OpenShift pull secret** — place at `/root/pull-secret` (or set `pull_secret_path`; download from [console.redhat.com](https://console.redhat.com/openshift/downloads))
+- **SSH key pair** — `ssh-keygen` at `/root/.ssh/id_rsa` (public key is injected into OCP nodes and used for Netris server SSH access)
 
 All system packages and tools are installed automatically by `make setup`. A pre-flight check validates all required files, KVM support, and minimum memory before deploying.
 
@@ -73,7 +74,7 @@ After `make deploy-ocp`, the kubeconfig is at `/root/.kube/config`.
 | `make setup` | Install prerequisites, cache images, build OCP/OSAC tools | ~10 min |
 | `make deploy-lab` | Deploy netris-lab (K3s, topology, VMs, connectivity) | ~30 min |
 | `make deploy-ocp` | Resize OCP VM + Netris networking + Assisted Service + OCP SNO | ~35-65 min |
-| `make deploy-osac` | Prepare OSAC overlay + run setup.sh (live output) | ~30-60 min |
+| `make deploy-osac` | Prepare OSAC overlay + run setup.sh + filter OS images | ~30-60 min |
 
 ### CaaS (run after deploy)
 
@@ -107,8 +108,10 @@ After `make deploy-ocp`, the kubeconfig is at `/root/.kube/config`.
 | `make connectivity` | Re-run lab connectivity (VPN, BGP, softgates) without full redeploy |
 | `make run-osac-setup` | Re-run just setup.sh with live output (after prep-osac has run) |
 | `make prep-osac` | Ansible-only OSAC prep (clone, overlay, secrets, env file) — no setup.sh |
+| `make post-osac` | Scale down MCE operators and filter OS images to target version |
 | `make vendor-update` | Refresh vendored Ansible collections |
 | `make lint` | Run ansible-lint |
+| `make gather` | Gather diagnostic info from the cluster |
 
 ### Typical Workflows
 
@@ -168,11 +171,13 @@ Then browse to `https://osac-aap-osac-devel.apps.ocp-sno.osac.local:9444` (accep
 
 ## How deploy-osac Works
 
-`make deploy-osac` runs in two phases for live terminal output:
+`make deploy-osac` runs in three phases:
 
-1. **`prep-osac`** (Ansible) — clones osac-installer, copies the development overlay to a working overlay (`osac-devel`), writes secrets (license, pull secret, SSH keys), configures env files with Netris integration settings, and disables unused components (bmf-operator).
+1. **`prep-osac`** (Ansible) — clones osac-installer, copies the development overlay to a working overlay (`osac-devel`), patches the operator chart to read the AAP token from a Kubernetes secret, creates placeholder secrets (AAP API token, bmf-operator configs), writes secrets (license, pull secret, SSH keys), configures env files with Netris integration settings, and disables unused components (bmf-operator).
 
-2. **`run-osac-setup`** (shell) — runs `setup.sh` directly in the terminal with live output. This installs OCP operators (LVMS, MetalLB, CNV, cert-manager, Authorino, Keycloak, AAP), deploys OSAC via Helm, applies AAP configuration, and runs post-install setup (AAP token, hub registration, tenant creation).
+2. **`run-osac-setup`** (shell) — runs `setup.sh` directly in the terminal with live output. This installs OCP operators (LVMS, MetalLB, CNV, cert-manager, Authorino, Keycloak, AAP), deploys OSAC via Helm, applies AAP configuration, and runs post-install setup (AAP token, hub registration, tenant creation). Retries up to 10 times with a 3-minute delay.
+
+3. **`post-osac`** (Ansible) — scales down MCE operators (infrastructure-operator, multicluster-engine-operator) to prevent them from resetting OS images, then filters `OS_IMAGES` in the assisted-service ConfigMap and `RHCOS_VERSIONS` in the assisted-image-service StatefulSet to only the target OCP version (`caas_ocp_version`, x86_64). Verifies the image-service pod contains only the expected version.
 
 ## Configuration
 
@@ -198,6 +203,7 @@ make deploy-osac EXTRA_VARS='{"osac_installer_branch": "feature-x"}'
 | `osac_kustomize_overlay` | `osac-devel` | OSAC overlay (copied from development) |
 | `osac_values_file` | `values/development/values.yaml` | Helm values file |
 | `osac_installer_branch` | `main` | osac-installer branch |
+| `osac_aap_branch` | `main` | osac-aap project branch (synced to AAP controller) |
 | `netris_username` | `netris` | Netris API username |
 | `netris_password` | `netris` | Netris API password |
 | `ew_fabric_enable` | `0` | East-West fabric (0=NS only) |

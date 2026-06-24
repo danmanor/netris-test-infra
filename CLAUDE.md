@@ -34,7 +34,8 @@ make setup                  # Install prerequisites, cache images, install OCP/O
 make deploy-lab             # Deploy netris-lab
 make connectivity           # Re-run lab connectivity (VPN, BGP, softgate agents)
 make deploy-ocp             # Resize OCP VM + configure Netris networking + install OCP SNO
-make deploy-osac            # Deploy OSAC + fulfillment-service
+make deploy-osac            # Deploy OSAC + fulfillment-service + filter OS images
+make post-osac              # Scale down MCE operators + filter OS images (runs in deploy-osac)
 make setup-caas             # CaaS setup: discover hosts, label agents, register host type
 make deploy-caas            # CaaS: create cluster
 make deploy-vmaas           # VMaaS flow (not yet implemented)
@@ -43,6 +44,7 @@ make destroy                # Teardown all infrastructure
 make destroy-osac           # Teardown OSAC only
 make destroy-ocp            # Reset OCP for reinstall
 make vendor-update          # Refresh vendored Ansible collections
+make gather                 # Gather diagnostic info from the cluster
 # Override variables: make <target> EXTRA_VARS="key=value"
 ```
 
@@ -71,7 +73,7 @@ All variables in `inventory/group_vars/all.yml`. Key sections:
 - **OCP VM sizing**: `ocp_server_vcpu`, `ocp_server_memory_gb`, disk sizes
 - **Netris networking**: `ocp_vpc_name`, `ocp_subnet_cidr`, SNAT/DNAT IPs
 - **OCP install**: `ocp_version`, `ocp_cluster_name`, `ocp_base_domain`
-- **OSAC**: `osac_installer_repo/branch`, `osac_namespace`, `osac_values_file`
+- **OSAC**: `osac_installer_repo/branch`, `osac_namespace`, `osac_values_file`, `osac_aap_branch`
 - **Component images**: `osac_operator_image`, `fulfillment_service_image` (empty = defaults)
 - **CaaS**: `caas_discovery_vm_patterns`, `caas_host_type_id`, `caas_cluster_name`, `caas_agents`
 
