@@ -53,6 +53,16 @@
         cmd: qemu-img create -f qcow2 /var/lib/libvirt/images/hgx-00-ocp.qcow2 {{ ocp_install_disk_gb }}G
       changed_when: true
 
+    - name: Detach discovery ISO if attached
+      ansible.builtin.shell:
+        cmd: |
+          if virsh domblklist {{ ocp_vm_name }} | grep -q 'infra-env.iso'; then
+            virsh detach-disk {{ ocp_vm_name }} sda --config
+          fi
+      when: ocp_vm_name | default('') | length > 0
+      changed_when: false
+      failed_when: false
+
     - name: Set boot order to disk first, then cdrom
       ansible.builtin.command:
         cmd: virt-xml {{ ocp_vm_name }} --edit --boot hd,cdrom
