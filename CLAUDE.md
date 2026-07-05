@@ -17,8 +17,7 @@ roles/                          # Ansible roles (each has tasks/main.yml)
   ocp_install/                  # Install OCP SNO via aicli
   osac_install/                 # Deploy OSAC (Helm + setup.sh)
   snapshot_pull/                # Pull + cache flavor OCI image (skopeo)
-  snapshot_restore/             # CoW disk overlays, qemu-nbd pre-boot config, boot VM
-  snapshot_recert/              # Recert certificates + cluster identity, wait for health
+  restore-snapshot/             # Deploy OCP from snapshot: CoW disks, pre-boot config, recert service, boot, health check
   osac_refresh/                 # Refresh OSAC via refresh-after-snapshot.py
   caas_discovery/               # Boot discovery VMs with InfraEnv ISO
   caas_setup/                   # Label agents, register host type, create cluster

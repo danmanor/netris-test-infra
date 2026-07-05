@@ -185,6 +185,19 @@
       ansible.builtin.set_fact:
         snapshot_etcd_image: "{{ _etcd_image_result.stdout | default('') | trim }}"
 
+    - name: Read ingress CN from flavor
+      ansible.builtin.slurp:
+        src: "{{ snapshot_flavor_dir }}/crypto/ingress-cn.txt"
+      register: _ingress_cn_raw
+
+    - name: Set ingress CN fact
+      ansible.builtin.set_fact:
+        _ingress_cn: "{{ _ingress_cn_raw.content | b64decode | trim }}"
+
+    - name: Set shared var directory path
+      ansible.builtin.set_fact:
+        _var: "{{ _deploy | regex_replace('deploy/[^/]+/$', 'var/') }}"
+
     - name: Report source identity
       ansible.builtin.debug:
         msg: >-
@@ -217,9 +230,27 @@
         dest: "{{ _deploy }}etc/default/sno_dnsmasq_configuration_overrides"
         mode: "0644"
 
-    # --- Write nmstate config + systemd service to apply it before OVN ---
+    # --- Stage recert working directory ---
 
-    - name: Write nmstate config for ens5 static IP
+    - name: Create recert working directory on disk
+      ansible.builtin.file:
+        path: "{{ _var }}lib/snapshot-recert/crypto"
+        state: directory
+        mode: "0755"
+
+    - name: Copy crypto directory to disk
+      ansible.builtin.shell:
+        cmd: cp -a {{ snapshot_flavor_dir }}/crypto/* {{ _var }}lib/snapshot-recert/crypto/
+      changed_when: true
+
+    - name: Copy pull-secret to disk
+      ansible.builtin.copy:
+        src: "{{ pull_secret_path }}"
+        dest: "{{ _var }}lib/snapshot-recert/crypto/pull-secret"
+        mode: "0600"
+        remote_src: true
+
+    - name: Write nmstate config to recert working directory
       ansible.builtin.copy:
         content: |
           interfaces:
@@ -248,40 +279,39 @@
               server:
               - 192.168.16.1
               - 8.8.8.8
-        dest: "{{ _deploy }}etc/snapshot-nmstate.yaml"
+        dest: "{{ _var }}lib/snapshot-recert/nmstate.yaml"
         mode: "0644"
 
-    - name: Write systemd service to apply nmstate before OVN
-      ansible.builtin.copy:
-        content: |
-          [Unit]
-          Description=Apply snapshot network config before OVN
-          Before=ovs-configuration.service nodeip-configuration.service
-          After=NetworkManager.service
-          ConditionPathExists=/etc/snapshot-nmstate.yaml
+    - name: Template recert script to disk
+      ansible.builtin.template:
+        src: recert.sh.j2
+        dest: "{{ _var }}lib/snapshot-recert/recert.sh"
+        mode: "0755"
 
-          [Service]
-          Type=oneshot
-          ExecStart=/usr/bin/nmstatectl apply /etc/snapshot-nmstate.yaml
-          ExecStartPost=/usr/bin/rm -f /etc/snapshot-nmstate.yaml
-          RemainAfterExit=yes
+    # --- Write systemd service and mask kubelet ---
 
-          [Install]
-          WantedBy=multi-user.target
-        dest: "{{ _deploy }}etc/systemd/system/snapshot-network-config.service"
+    - name: Write snapshot-recert systemd service
+      ansible.builtin.template:
+        src: snapshot-recert.service.j2
+        dest: "{{ _deploy }}etc/systemd/system/snapshot-recert.service"
         mode: "0644"
 
-    - name: Enable snapshot-network-config service
+    - name: Enable snapshot-recert service
       ansible.builtin.shell:
-        cmd: ln -sf /etc/systemd/system/snapshot-network-config.service {{ _deploy }}etc/systemd/system/multi-user.target.wants/snapshot-network-config.service
+        cmd: ln -sf /etc/systemd/system/snapshot-recert.service {{ _deploy }}etc/systemd/system/multi-user.target.wants/snapshot-recert.service
+      changed_when: true
+
+    - name: Mask kubelet so it does not start on boot
+      ansible.builtin.shell:
+        cmd: ln -sf /dev/null {{ _deploy }}etc/systemd/system/kubelet.service
       changed_when: true
 
     - name: Fix SELinux labels on written files
       ansible.builtin.shell:
         cmd: |
-          chcon system_u:object_r:systemd_unit_file_t:s0 {{ _deploy }}etc/systemd/system/snapshot-network-config.service
-          chcon -h system_u:object_r:systemd_unit_file_t:s0 {{ _deploy }}etc/systemd/system/multi-user.target.wants/snapshot-network-config.service
-          chcon system_u:object_r:etc_t:s0 {{ _deploy }}etc/snapshot-nmstate.yaml
+          chcon system_u:object_r:bin_t:s0 {{ _var }}lib/snapshot-recert/recert.sh
+          chcon system_u:object_r:systemd_unit_file_t:s0 {{ _deploy }}etc/systemd/system/snapshot-recert.service
+          chcon -h system_u:object_r:systemd_unit_file_t:s0 {{ _deploy }}etc/systemd/system/multi-user.target.wants/snapshot-recert.service
           chcon system_u:object_r:etc_t:s0 {{ _deploy }}etc/default/sno_dnsmasq_configuration_overrides
       changed_when: true
 
@@ -388,3 +418,114 @@
 - name: Report VM booted
   ansible.builtin.debug:
     msg: "VM {{ ocp_vm_name }} booted, SSH accessible at {{ _vm_ssh_ip }} (DNAT → {{ ocp_node_ip }})"
+
+- name: Set SSH command prefix
+  ansible.builtin.set_fact:
+    _ssh_cmd: >-
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10
+      -i {{ snapshot_flavor_dir }}/crypto/cluster-tool.key
+      core@{{ _vm_ssh_ip }}
+
+# --- Wait for snapshot-recert.service to complete ---
+
+- name: Wait for snapshot-recert service to finish
+  ansible.builtin.shell:
+    cmd: >-
+      {{ _ssh_cmd }} "systemctl is-active snapshot-recert.service 2>/dev/null || echo unknown"
+  register: _svc_status
+  until: _svc_status.stdout | trim in ['inactive', 'failed']
+  retries: 120
+  delay: 10
+  changed_when: false
+
+- name: Fetch service logs on failure
+  ansible.builtin.shell:
+    cmd: >-
+      {{ _ssh_cmd }} "sudo journalctl -u snapshot-recert.service --no-pager -n 100"
+  register: _svc_logs
+  when: _svc_status.stdout | trim == 'failed'
+
+- name: Fail if recert service failed
+  ansible.builtin.fail:
+    msg: |
+      snapshot-recert.service failed. Logs:
+      {{ _svc_logs.stdout | default('no logs available') }}
+  when: _svc_status.stdout | trim == 'failed'
+
+# --- Wait for cluster health ---
+
+- name: Wait for API server healthy
+  ansible.builtin.shell:
+    cmd: >-
+      {{ _ssh_cmd }} "curl -sk https://localhost:6443/healthz"
+  register: _api_health
+  until: _api_health.stdout | default('') == 'ok'
+  retries: 60
+  delay: 10
+
+# --- Extract kubeconfig ---
+
+- name: Ensure .kube directory exists
+  ansible.builtin.file:
+    path: /root/.kube
+    state: directory
+    mode: "0700"
+
+- name: Extract kubeconfig from VM
+  ansible.builtin.shell:
+    cmd: >-
+      {{ _ssh_cmd }} "sudo cat /etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/lb-ext.kubeconfig"
+  register: _kubeconfig_content
+
+- name: Write kubeconfig
+  ansible.builtin.copy:
+    content: "{{ _kubeconfig_content.stdout }}"
+    dest: "/root/kubeconfig.{{ ocp_cluster_name }}"
+    mode: "0600"
+
+- name: Copy kubeconfig to default location
+  ansible.builtin.copy:
+    content: "{{ _kubeconfig_content.stdout }}"
+    dest: /root/.kube/config
+    mode: "0600"
+
+# --- Wait for cluster ready ---
+
+- name: Wait for node Ready
+  ansible.builtin.shell:
+    cmd: >-
+      oc get nodes --no-headers 2>/dev/null | grep -q ' Ready'
+  environment:
+    KUBECONFIG: /root/.kube/config
+  register: _node_ready
+  until: _node_ready.rc == 0
+  retries: 60
+  delay: 30
+
+- name: Wait for all ClusterOperators healthy
+  ansible.builtin.shell:
+    cmd: |
+      oc get co -o json | python3 -c "
+      import json, sys
+      cos = json.load(sys.stdin)['items']
+      for co in cos:
+          name = co['metadata']['name']
+          conditions = {c['type']: c['status'] for c in co.get('status', {}).get('conditions', [])}
+          if conditions.get('Available') != 'True':
+              print(f'NOT READY: {name} (Available={conditions.get(\"Available\")})')
+              sys.exit(1)
+          if conditions.get('Degraded') == 'True':
+              print(f'DEGRADED: {name}')
+              sys.exit(1)
+      print(f'All {len(cos)} ClusterOperators healthy')
+      "
+  environment:
+    KUBECONFIG: /root/.kube/config
+  register: _co_health
+  until: _co_health.rc == 0
+  retries: 40
+  delay: 30
+
+- name: Report cluster status
+  ansible.builtin.debug:
+    msg: "{{ _co_health.stdout }}"

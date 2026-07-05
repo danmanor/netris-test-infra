@@ -1,5 +1,5 @@
 .PHONY: deploy deploy-fast setup deploy-lab deploy-ocp deploy-ocp-snapshot deploy-osac \
-       snapshot-recert snapshot-refresh prep-snapshot-refresh run-snapshot-refresh post-snapshot-refresh \
+       restore-ocp-snapshot snapshot-refresh prep-snapshot-refresh run-snapshot-refresh post-snapshot-refresh \
        setup-caas deploy-caas \
        deploy-vmaas deploy-bmaas \
        destroy destroy-osac destroy-ocp destroy-caas destroy-vmaas destroy-bmaas \
@@ -61,10 +61,10 @@ deploy-bmaas:
 # Snapshot-based fast deployment
 deploy-fast: deploy-lab deploy-ocp-snapshot
 
-deploy-ocp-snapshot: snapshot-recert snapshot-refresh
+deploy-ocp-snapshot: restore-ocp-snapshot snapshot-refresh
 
-snapshot-recert:
-	ansible-playbook playbooks/snapshot-recert.yml $(ANSIBLE_EXTRA)
+restore-ocp-snapshot:
+	ansible-playbook playbooks/restore-ocp-snapshot.yml $(ANSIBLE_EXTRA)
 
 snapshot-refresh: prep-snapshot-refresh run-snapshot-refresh post-snapshot-refresh
 

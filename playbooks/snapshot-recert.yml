@@ -1,9 +1,0 @@
----
-- name: Deploy OCP from snapshot (recert)
-  hosts: all
-  gather_facts: false
-  roles:
-    - netris_configure
-    - ocp_dns
-    - snapshot_restore
-    - snapshot_recert
