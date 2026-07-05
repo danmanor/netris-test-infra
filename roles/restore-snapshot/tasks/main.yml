@@ -489,6 +489,20 @@
     dest: /root/.kube/config
     mode: "0600"
 
+# --- Fix pull-secret in openshift-config (recert writes path instead of content) ---
+
+- name: Fix pull-secret in openshift-config
+  ansible.builtin.shell:
+    cmd: >-
+      oc set data secret/pull-secret -n openshift-config
+      --from-file=.dockerconfigjson={{ pull_secret_path }}
+  environment:
+    KUBECONFIG: /root/.kube/config
+  register: _fix_pull_secret
+  until: _fix_pull_secret.rc == 0
+  retries: 10
+  delay: 10
+
 # --- Wait for cluster ready ---
 
 - name: Wait for node Ready
