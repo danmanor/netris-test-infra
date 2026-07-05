@@ -306,6 +306,13 @@
         cmd: mv {{ _deploy }}etc/systemd/system/kubelet.service {{ _deploy }}etc/systemd/system/kubelet.service.snapshot-disabled
       changed_when: true
 
+    - name: Disable reverse path filter on ens4 for management access
+      ansible.builtin.copy:
+        content: |
+          net.ipv4.conf.ens4.rp_filter=0
+        dest: "{{ _deploy }}etc/sysctl.d/99-snapshot-rp-filter.conf"
+        mode: "0644"
+
     - name: Fix SELinux labels on written files
       ansible.builtin.shell:
         cmd: |
@@ -313,14 +320,8 @@
           chcon system_u:object_r:systemd_unit_file_t:s0 {{ _deploy }}etc/systemd/system/snapshot-recert.service
           chcon -h system_u:object_r:systemd_unit_file_t:s0 {{ _deploy }}etc/systemd/system/multi-user.target.wants/snapshot-recert.service
           chcon system_u:object_r:etc_t:s0 {{ _deploy }}etc/default/sno_dnsmasq_configuration_overrides
+          chcon system_u:object_r:system_conf_t:s0 {{ _deploy }}etc/sysctl.d/99-snapshot-rp-filter.conf
       changed_when: true
-
-    - name: Disable reverse path filter on ens4 for management access
-      ansible.builtin.copy:
-        content: |
-          net.ipv4.conf.ens4.rp_filter=0
-        dest: "{{ _deploy }}etc/sysctl.d/99-snapshot-rp-filter.conf"
-        mode: "0644"
 
     # --- Delete OVN/OVS state ---
 
