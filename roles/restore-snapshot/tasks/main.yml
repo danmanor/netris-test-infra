@@ -431,7 +431,7 @@
 - name: Wait for snapshot-recert service to finish
   ansible.builtin.shell:
     cmd: >-
-      {{ _ssh_cmd }} "systemctl is-active snapshot-recert.service 2>/dev/null || echo unknown"
+      {{ _ssh_cmd }} "systemctl is-active snapshot-recert.service 2>/dev/null; true"
   register: _svc_status
   until: _svc_status.stdout | trim in ['inactive', 'failed']
   retries: 120
