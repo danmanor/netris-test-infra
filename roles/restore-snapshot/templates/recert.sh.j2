@@ -129,6 +129,13 @@ print([c['image'] for c in d['spec']['containers'] if c['name'] == 'etcd'][0])
 }
 run_once "recert" run_recert
 
+# --- Fix pull-secret (recert writes the file path instead of content) ---
+fix_pull_secret() {
+  log "Fixing pull-secret on disk"
+  cp "${CRYPTO_DIR}/pull-secret" /var/lib/kubelet/config.json
+}
+run_once "fix-pull-secret" fix_pull_secret
+
 # --- Start services ---
 start_services() {
   log "Starting CRI-O"
