@@ -306,6 +306,16 @@
         cmd: mv {{ _deploy }}etc/systemd/system/kubelet.service {{ _deploy }}etc/systemd/system/kubelet.service.snapshot-disabled
       changed_when: true
 
+    - name: Add SSH public key to core user authorized_keys
+      ansible.builtin.shell:
+        cmd: |
+          mkdir -p {{ _deploy }}home/core/.ssh
+          cat {{ ssh_public_key_path }} >> {{ _deploy }}home/core/.ssh/authorized_keys
+          chmod 700 {{ _deploy }}home/core/.ssh
+          chmod 600 {{ _deploy }}home/core/.ssh/authorized_keys
+          chown -R 1000:1000 {{ _deploy }}home/core/.ssh
+      changed_when: true
+
     - name: Disable reverse path filter on ens4 for management access
       ansible.builtin.copy:
         content: |
