@@ -499,7 +499,7 @@
 - name: Gather boot-time service status from SNO VM
   ansible.builtin.shell: |
     {{ _sno_ssh }} '
-      for svc in snapshot-network-config ovs-configuration nodeip-configuration NetworkManager; do
+      for svc in snapshot-recert ovs-configuration nodeip-configuration NetworkManager; do
         echo "=== $svc ==="
         sudo systemctl status "$svc" --no-pager 2>&1
         echo
@@ -508,8 +508,13 @@
   changed_when: false
   failed_when: false
 
-- name: Gather snapshot-nmstate.yaml from SNO VM (present means never applied)
-  ansible.builtin.shell: "{{ _sno_ssh }} 'sudo cat /etc/snapshot-nmstate.yaml 2>&1 || echo \"(file absent — nmstatectl applied and removed it)\"' > {{ _gather_dir }}/lab/ocp/node/snapshot-nmstate 2>&1 || echo 'SSH unreachable' > {{ _gather_dir }}/lab/ocp/node/snapshot-nmstate"
+- name: Gather snapshot-recert service journal from SNO VM
+  ansible.builtin.shell: "{{ _sno_ssh }} 'sudo journalctl -u snapshot-recert.service --no-pager' > {{ _gather_dir }}/lab/ocp/node/snapshot-recert-journal 2>&1 || echo 'SSH unreachable' > {{ _gather_dir }}/lab/ocp/node/snapshot-recert-journal"
+  changed_when: false
+  failed_when: false
+
+- name: Gather snapshot-recert run_once markers from SNO VM
+  ansible.builtin.shell: "{{ _sno_ssh }} 'ls -la /var/lib/snapshot-recert/markers/ 2>&1 || echo \"(no markers — working dir cleaned up)\"' > {{ _gather_dir }}/lab/ocp/node/snapshot-recert-markers 2>&1 || echo 'SSH unreachable' > {{ _gather_dir }}/lab/ocp/node/snapshot-recert-markers"
   changed_when: false
   failed_when: false
 
