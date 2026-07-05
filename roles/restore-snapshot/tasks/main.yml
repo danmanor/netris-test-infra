@@ -301,9 +301,9 @@
         cmd: ln -sf /etc/systemd/system/snapshot-recert.service {{ _deploy }}etc/systemd/system/multi-user.target.wants/snapshot-recert.service
       changed_when: true
 
-    - name: Mask kubelet so it does not start on boot
+    - name: Disable kubelet so it does not start on boot
       ansible.builtin.shell:
-        cmd: ln -sf /dev/null {{ _deploy }}etc/systemd/system/kubelet.service
+        cmd: mv {{ _deploy }}etc/systemd/system/kubelet.service {{ _deploy }}etc/systemd/system/kubelet.service.snapshot-disabled
       changed_when: true
 
     - name: Fix SELinux labels on written files

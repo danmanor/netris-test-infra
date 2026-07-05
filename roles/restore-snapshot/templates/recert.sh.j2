@@ -134,13 +134,10 @@ start_services() {
   log "Starting CRI-O"
   systemctl start crio.service
 
-  log "Unmasking kubelet"
-  rm -f /etc/systemd/system/kubelet.service
+  log "Restoring and starting kubelet"
+  mv /etc/systemd/system/kubelet.service.snapshot-disabled /etc/systemd/system/kubelet.service
   systemctl daemon-reload
-
-  log "Enabling and starting kubelet"
-  systemctl enable kubelet
-  systemctl start kubelet
+  systemctl enable --now kubelet
 
   log "Touching static pod manifests to force recreation"
   find /etc/kubernetes/manifests -name '*.yaml' -exec touch {} + 2>/dev/null || true
