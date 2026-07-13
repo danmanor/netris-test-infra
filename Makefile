@@ -98,7 +98,7 @@ destroy-ocp:
 	ansible-playbook playbooks/destroy-ocp.yml $(ANSIBLE_EXTRA)
 
 destroy-caas:
-	$(PLAY) playbooks/destroy-caas.yml $(EXTRA_ARGS)
+	ansible-playbook playbooks/destroy-caas.yml $(ANSIBLE_EXTRA)
 
 destroy-vmaas:
 	@echo "VMaaS teardown is not yet implemented"
