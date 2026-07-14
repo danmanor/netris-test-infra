@@ -1,0 +1,6 @@
+---
+- name: Order a bare-metal instance through OSAC
+  hosts: all
+  gather_facts: false
+  roles:
+    - bmaas_create

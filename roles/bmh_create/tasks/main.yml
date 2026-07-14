@@ -1,0 +1,76 @@
+---
+- name: Create BMC credentials secret
+  ansible.builtin.shell:
+    cmd: >
+      oc create secret generic bmaas-bmc-creds
+      --from-literal=username={{ bmaas_bmc_username }}
+      --from-literal=password={{ bmaas_bmc_password }}
+      -n {{ snapshot_osac_namespace | default(osac_namespace) }}
+      --dry-run=client -o yaml | oc apply -f -
+  environment:
+    KUBECONFIG: /root/.kube/config
+  changed_when: false
+  register: _bmc_creds_result
+  until: _bmc_creds_result.rc == 0
+  retries: 10
+  delay: 15
+
+- name: Find target VMs
+  ansible.builtin.shell:
+    cmd: virsh list --all --name | grep "{{ item }}"
+  register: _target_vm_lookup
+  changed_when: false
+  loop: "{{ bmaas_target_vm_patterns }}"
+
+- name: Build VM name list
+  ansible.builtin.set_fact:
+    bmaas_target_vms: "{{ _target_vm_lookup.results | map(attribute='stdout_lines') | map('first') | list }}"
+
+- name: Get VM UUIDs
+  ansible.builtin.shell:
+    cmd: virsh domuuid {{ item }}
+  register: _target_vm_uuids
+  changed_when: false
+  loop: "{{ bmaas_target_vms }}"
+
+- name: Get VM mgmt NIC MAC addresses
+  ansible.builtin.shell:
+    cmd: virsh domiflist {{ item }} | grep bridge | awk '{print $5}'
+  register: _target_vm_macs
+  changed_when: false
+  loop: "{{ bmaas_target_vms }}"
+
+- name: Build target host list (name, uuid, mac)
+  ansible.builtin.set_fact:
+    bmaas_targets: "{{ bmaas_target_vms | zip(_target_vm_uuids.results | map(attribute='stdout') | map('trim'), _target_vm_macs.results | map(attribute='stdout') | map('trim')) | list }}"
+
+- name: Apply BareMetalHost CRs
+  ansible.builtin.shell:
+    cmd: oc apply -f -
+    stdin: "{{ lookup('ansible.builtin.template', 'baremetal_host.yml.j2') }}"
+  environment:
+    KUBECONFIG: /root/.kube/config
+  loop: "{{ bmaas_targets }}"
+  loop_control:
+    label: "{{ item[0] }}"
+  register: _bmh_apply
+  changed_when: "'created' in _bmh_apply.stdout or 'configured' in _bmh_apply.stdout"
+  until: _bmh_apply.rc == 0
+  retries: 10
+  delay: 15
+
+- name: Wait for BareMetalHost to become available
+  ansible.builtin.shell:
+    cmd: >
+      oc get baremetalhost {{ item[0] }} -n {{ snapshot_osac_namespace | default(osac_namespace) }}
+      -o jsonpath='{.status.provisioning.state}'
+  environment:
+    KUBECONFIG: /root/.kube/config
+  register: _bmh_state
+  until: _bmh_state.stdout == 'available'
+  retries: 60
+  delay: 30
+  changed_when: false
+  loop: "{{ bmaas_targets }}"
+  loop_control:
+    label: "{{ item[0] }}"

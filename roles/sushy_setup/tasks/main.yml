@@ -1,0 +1,63 @@
+---
+- name: Ensure .ssh directory exists
+  ansible.builtin.file:
+    path: "{{ bmaas_sushy_key_path | dirname }}"
+    state: directory
+    mode: "0700"
+
+- name: Generate SSH keypair for sushy-tools to reach the hypervisor
+  ansible.builtin.command:
+    cmd: ssh-keygen -t ed25519 -f {{ bmaas_sushy_key_path }} -N '' -q
+    creates: "{{ bmaas_sushy_key_path }}"
+
+- name: Trust the sushy-tools key on the hypervisor
+  ansible.posix.authorized_key:
+    user: "{{ bmaas_hypervisor_bastion_user }}"
+    key: "{{ lookup('file', bmaas_sushy_key_path + '.pub') }}"
+
+- name: Create sushy-tools SSH key secret
+  ansible.builtin.shell:
+    cmd: >
+      oc create secret generic bmaas-sushy-ssh-key
+      --from-file=id_rsa={{ bmaas_sushy_key_path }}
+      -n {{ snapshot_osac_namespace | default(osac_namespace) }}
+      --dry-run=client -o yaml | oc apply -f -
+  environment:
+    KUBECONFIG: /root/.kube/config
+  changed_when: false
+  register: _sushy_key_result
+  until: _sushy_key_result.rc == 0
+  retries: 10
+  delay: 15
+
+- name: Apply sushy-tools Deployment and Service
+  ansible.builtin.shell:
+    cmd: oc apply -f -
+    stdin: "{{ lookup('ansible.builtin.template', 'sushy_deployment.yml.j2') }}"
+  environment:
+    KUBECONFIG: /root/.kube/config
+  register: _sushy_apply
+  changed_when: "'created' in _sushy_apply.stdout or 'configured' in _sushy_apply.stdout"
+  until: _sushy_apply.rc == 0
+  retries: 10
+  delay: 15
+
+- name: Wait for sushy-tools rollout
+  ansible.builtin.command:
+    cmd: oc rollout status deployment/sushy-tools -n {{ snapshot_osac_namespace | default(osac_namespace) }} --timeout=120s
+  environment:
+    KUBECONFIG: /root/.kube/config
+  changed_when: false
+
+- name: Confirm sushy-tools Redfish endpoint is live
+  ansible.builtin.shell:
+    cmd: >
+      oc exec deploy/sushy-tools -n {{ snapshot_osac_namespace | default(osac_namespace) }} --
+      curl -sf http://localhost:{{ bmaas_sushy_port }}/redfish/v1/
+  environment:
+    KUBECONFIG: /root/.kube/config
+  register: _sushy_health
+  until: _sushy_health.rc == 0
+  retries: 10
+  delay: 10
+  changed_when: false

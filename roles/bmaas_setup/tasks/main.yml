@@ -1,0 +1,64 @@
+---
+- name: Get fulfillment internal API URL
+  ansible.builtin.shell:
+    cmd: oc get route fulfillment-internal-api -n {{ snapshot_osac_namespace | default(osac_namespace) }} -o jsonpath='{.status.ingress[0].host}'
+  environment:
+    KUBECONFIG: /root/.kube/config
+  register: _fulfillment_host
+  changed_when: false
+  until: _fulfillment_host.rc == 0 and _fulfillment_host.stdout | length > 0
+  retries: 10
+  delay: 15
+
+- name: Set fulfillment API URL
+  ansible.builtin.set_fact:
+    bmaas_fulfillment_api: "https://{{ _fulfillment_host.stdout }}"
+
+- name: Get service account token
+  ansible.builtin.shell:
+    cmd: oc create token -n {{ snapshot_osac_namespace | default(osac_namespace) }} admin
+  environment:
+    KUBECONFIG: /root/.kube/config
+  register: _sa_token
+  changed_when: false
+  until: _sa_token.rc == 0 and _sa_token.stdout | length > 0
+  retries: 10
+  delay: 15
+
+- name: Create bare-metal host type
+  ansible.builtin.uri:
+    url: "{{ bmaas_fulfillment_api }}/api/private/v1/host_types"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ _sa_token.stdout }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      id: "{{ bmaas_host_type_id }}"
+      title: "{{ bmaas_host_type_title }}"
+      description: "{{ bmaas_host_type_description }}"
+    validate_certs: false
+    status_code: [200, 201, 409]
+
+- name: Create bare-metal instance catalog item
+  ansible.builtin.uri:
+    url: "{{ bmaas_fulfillment_api }}/api/private/v1/baremetal_instance_catalog_items"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ _sa_token.stdout }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      id: "{{ bmaas_catalog_item }}"
+      title: "{{ bmaas_catalog_item_title }}"
+      description: "{{ bmaas_catalog_item_description }}"
+      published: true
+    validate_certs: false
+    status_code: [200, 201, 409]
+
+- name: Report BMaaS setup complete
+  ansible.builtin.debug:
+    msg: >-
+      BMaaS setup: {{ bmaas_targets | length }} BareMetalHost(s) available,
+      sushy-tools live, host type {{ bmaas_host_type_id }} and catalog item
+      {{ bmaas_catalog_item }} registered.

@@ -1,0 +1,8 @@
+---
+- name: Set up BMaaS — deploy sushy-tools, register BareMetalHosts
+  hosts: all
+  gather_facts: false
+  roles:
+    - sushy_setup
+    - bmh_create
+    - bmaas_setup

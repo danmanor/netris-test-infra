@@ -4,3 +4,4 @@
   gather_facts: false
   roles:
     - osac_refresh
+    - metal3_setup

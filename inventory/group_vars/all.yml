@@ -112,3 +112,22 @@ caas_agents:
     netris_server_name: "hgx-pod00-su0-h02"
   - vm_pattern: "hgx-pod00-su0-h03"
     netris_server_name: "hgx-pod00-su0-h03"
+
+# BMaaS targets (same lab VMs CaaS uses as fake bare-metal hosts)
+bmaas_target_vm_patterns: "{{ caas_discovery_vm_patterns }}"
+
+# BMaaS Setup (sushy-tools, BareMetalHost registration, OSAC host type/catalog item)
+bmaas_hypervisor_bastion_ip: "192.168.16.254"
+bmaas_hypervisor_bastion_user: "root"
+bmaas_sushy_port: 8000
+bmaas_sushy_image: "quay.io/metal3-io/sushy-tools:latest"
+bmaas_sushy_key_path: "{{ lookup('env', 'HOME') }}/.ssh/bmaas_sushy_key"
+bmaas_bmc_username: "admin"
+bmaas_bmc_password: "netris"
+bmaas_host_type_id: "ci-baremetal"
+bmaas_host_type_title: "CI Bare Metal"
+bmaas_host_type_description: "Bare-metal hosts for CI testing"
+bmaas_catalog_item: "ci-baremetal-host"
+bmaas_catalog_item_title: "CI Bare Metal Host"
+bmaas_catalog_item_description: "Single bare-metal host for CI testing"
+bmaas_instance_name: "bmaas-ci-instance"

@@ -1,0 +1,32 @@
+---
+- name: Delete sushy-tools Deployment, Service and SSH key secret
+  ansible.builtin.command:
+    cmd: oc delete {{ item }} -n {{ snapshot_osac_namespace | default(osac_namespace) }} --ignore-not-found
+  loop:
+    - "deployment/sushy-tools"
+    - "service/sushy-tools"
+    - "secret/bmaas-sushy-ssh-key"
+  environment:
+    KUBECONFIG: /root/.kube/config
+  changed_when: true
+
+- name: Check if sushy-tools SSH key exists
+  ansible.builtin.stat:
+    path: "{{ bmaas_sushy_key_path }}.pub"
+  register: _sushy_pubkey_stat
+
+- name: Untrust the sushy-tools SSH key on the hypervisor
+  ansible.posix.authorized_key:
+    user: "{{ bmaas_hypervisor_bastion_user }}"
+    key: "{{ lookup('file', bmaas_sushy_key_path + '.pub') }}"
+    state: absent
+  when: _sushy_pubkey_stat.stat.exists
+  failed_when: false
+
+- name: Remove sushy-tools SSH keypair
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ bmaas_sushy_key_path }}"
+    - "{{ bmaas_sushy_key_path }}.pub"

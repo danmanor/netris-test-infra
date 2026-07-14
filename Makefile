@@ -1,7 +1,7 @@
 .PHONY: deploy deploy-fast setup deploy-lab deploy-ocp deploy-ocp-snapshot deploy-osac \
        restore-ocp-snapshot snapshot-refresh prep-snapshot-refresh run-snapshot-refresh post-snapshot-refresh \
        setup-caas deploy-caas \
-       deploy-vmaas deploy-bmaas \
+       deploy-vmaas setup-bmaas deploy-bmaas \
        destroy destroy-osac destroy-ocp destroy-caas destroy-vmaas destroy-bmaas \
        connectivity prep-osac run-osac-setup post-osac vendor-update lint \
        gather gather-lab gather-caas \
@@ -55,8 +55,11 @@ deploy-caas:
 deploy-vmaas:
 	@echo "VMaaS flow is not yet implemented"
 
+setup-bmaas:
+	ansible-playbook playbooks/setup-bmaas.yml $(ANSIBLE_EXTRA)
+
 deploy-bmaas:
-	@echo "BMaaS flow is not yet implemented"
+	ansible-playbook playbooks/deploy-bmaas.yml $(ANSIBLE_EXTRA)
 
 # Snapshot-based fast deployment
 deploy-fast: deploy-lab deploy-ocp-snapshot
@@ -104,7 +107,7 @@ destroy-vmaas:
 	@echo "VMaaS teardown is not yet implemented"
 
 destroy-bmaas:
-	@echo "BMaaS teardown is not yet implemented"
+	ansible-playbook playbooks/destroy-bmaas.yml $(ANSIBLE_EXTRA)
 
 # Utilities
 vendor-update:

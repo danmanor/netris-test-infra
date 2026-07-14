@@ -1,0 +1,8 @@
+---
+- name: Tear down BMaaS
+  hosts: all
+  gather_facts: false
+  roles:
+    - bmh_destroy
+    - bmaas_destroy
+    - sushy_destroy

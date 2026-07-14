@@ -127,12 +127,12 @@
              | combine({'bundledPostgres': {'enabled': true}}, recursive=true)
              | to_nice_yaml(indent=2) }}
 
-- name: Disable bare-metal fulfillment operator
+- name: Enable bare-metal fulfillment operator
   ansible.builtin.blockinfile:
     path: "{{ osac_installer_dir }}/{{ osac_values_file }}"
     block: |
       bmf:
-        enabled: false
+        enabled: true
     marker: "# {mark} NETRIS-TEST-INFRA BMF OVERRIDE"
 
 - name: Override component images in values file
@@ -190,24 +190,18 @@
     state: directory
     mode: "0755"
 
-- name: Create placeholder secrets for bmf-operator
+- name: Apply real bmf-operator secrets
   ansible.builtin.shell:
-    cmd: >
-      oc create secret generic {{ item }}
-      --from-literal=placeholder=unused
-      -n {{ osac_namespace }}
-      --dry-run=client -o yaml | oc apply -f -
+    cmd: oc apply -f -
+    stdin: "{{ lookup('ansible.builtin.template', 'bmf_secrets.yml.j2') }}"
   environment:
     KUBECONFIG: /root/.kube/config
-  loop:
-    - osac-management-config
-    - osac-os-clouds
-    - osac-inventory-config
-  changed_when: false
   register: _secrets_result
+  changed_when: "'configured' in _secrets_result.stdout or 'created' in _secrets_result.stdout"
   until: _secrets_result.rc == 0
   retries: 10
   delay: 15
+
 
 - name: Create placeholder AAP API token secret
   ansible.builtin.shell:

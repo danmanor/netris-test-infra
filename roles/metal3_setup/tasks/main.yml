@@ -1,0 +1,27 @@
+---
+# Activates OpenShift's built-in baremetal operator (Ironic/ironic-inspector) by
+# creating the Provisioning CR it's waiting on. Independent of OSAC/bmf.
+
+- name: Find OCP server VM for Provisioning CR
+  ansible.builtin.shell:
+    cmd: virsh list --all --name | grep "{{ ocp_vm_name_pattern }}"
+  register: _bmf_vm_lookup
+  changed_when: false
+
+- name: Get mgmt NIC MAC address for Provisioning CR
+  ansible.builtin.shell:
+    cmd: virsh domiflist {{ _bmf_vm_lookup.stdout_lines[0] }} | grep bridge | awk '{print $5}'
+  register: _mgmt_mac_for_bmf
+  changed_when: false
+
+- name: Activate OpenShift's baremetal operator (Ironic) for BMaaS
+  ansible.builtin.shell:
+    cmd: oc apply -f -
+    stdin: "{{ lookup('ansible.builtin.template', 'provisioning.yml.j2') }}"
+  environment:
+    KUBECONFIG: /root/.kube/config
+  register: _provisioning_apply
+  changed_when: "'created' in _provisioning_apply.stdout or 'configured' in _provisioning_apply.stdout"
+  until: _provisioning_apply.rc == 0
+  retries: 10
+  delay: 15

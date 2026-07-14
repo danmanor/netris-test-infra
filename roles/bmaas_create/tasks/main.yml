@@ -1,0 +1,42 @@
+---
+- name: Check if bare-metal instance already exists
+  ansible.builtin.shell:
+    cmd: >
+      osac get baremetalinstances -o json |
+      python3 -c "import sys,json; instances=json.load(sys.stdin); print('exists' if any(i.get('metadata',{}).get('name')=='{{ bmaas_instance_name }}' for i in instances) else 'absent')"
+  register: _instance_exists
+  changed_when: false
+  failed_when: false
+
+- name: Create bare-metal instance
+  ansible.builtin.command:
+    cmd: >-
+      osac create baremetalinstance
+      --catalog-item {{ bmaas_catalog_item }}
+      --name {{ bmaas_instance_name }}
+      --ssh-key {{ ssh_public_key_path }}
+  register: _instance_create
+  when: _instance_exists.stdout | default('') != 'exists'
+  changed_when: true
+
+- name: Wait for instance to be running
+  ansible.builtin.shell:
+    cmd: |
+      STATE=$(osac get baremetalinstances -o json | python3 -c "import sys,json; instances=json.load(sys.stdin); i=next(i for i in instances if i.get('metadata',{}).get('name')=='{{ bmaas_instance_name }}'); print(i.get('status',{}).get('state',''))")
+      echo "$STATE"
+      if [ "$STATE" = "BARE_METAL_INSTANCE_STATE_FAILED" ]; then exit 2; fi
+  register: _instance_state
+  until: _instance_state.stdout == "BARE_METAL_INSTANCE_STATE_RUNNING"
+  retries: 60
+  delay: 15
+  failed_when: _instance_state.rc == 2
+  changed_when: false
+
+- name: Fail if instance ended in FAILED state
+  ansible.builtin.fail:
+    msg: "BMaaS instance '{{ bmaas_instance_name }}' is in FAILED state"
+  when: _instance_state.stdout == "BARE_METAL_INSTANCE_STATE_FAILED"
+
+- name: Report instance ready
+  ansible.builtin.debug:
+    msg: "BMaaS instance '{{ bmaas_instance_name }}' is RUNNING"

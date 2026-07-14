@@ -1,0 +1,54 @@
+---
+apiVersion: v1
+kind: Deployment
+metadata:
+  name: sushy-tools
+  namespace: {{ snapshot_osac_namespace | default(osac_namespace) }}
+  labels:
+    app: sushy-tools
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sushy-tools
+  template:
+    metadata:
+      labels:
+        app: sushy-tools
+    spec:
+      containers:
+        - name: sushy-tools
+          image: "{{ bmaas_sushy_image }}"
+          ports:
+            - containerPort: {{ bmaas_sushy_port }}
+          env:
+            - name: HOME
+              value: /root
+            - name: SUSHY_EMULATOR_LIBVIRT_URI
+              value: "qemu+ssh://{{ bmaas_hypervisor_bastion_user }}@{{ bmaas_hypervisor_bastion_ip }}/system?keyfile=/root/.ssh/id_rsa&no_verify=1&no_tty=1"
+            - name: SUSHY_EMULATOR_LISTEN_PORT
+              value: "{{ bmaas_sushy_port }}"
+          volumeMounts:
+            - name: ssh-key
+              mountPath: /root/.ssh
+              readOnly: true
+      volumes:
+        - name: ssh-key
+          secret:
+            secretName: bmaas-sushy-ssh-key
+            # 0600 would only be readable by the file owner (root); OpenShift's default
+            # SCC runs containers as an arbitrary non-root UID, so the key must stay
+            # group-readable (via the pod's SCC-assigned fsGroup) without being writable.
+            defaultMode: 0440
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sushy-tools
+  namespace: {{ snapshot_osac_namespace | default(osac_namespace) }}
+spec:
+  selector:
+    app: sushy-tools
+  ports:
+    - port: {{ bmaas_sushy_port }}
+      targetPort: {{ bmaas_sushy_port }}

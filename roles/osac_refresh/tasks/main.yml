@@ -100,6 +100,30 @@
         {{ osac_installer_dir }}/{{ snapshot_osac_values_file }}
   when: osac_aap_branch | default('') | length > 0
 
+- name: Enable bare-metal fulfillment operator in values file
+  ansible.builtin.shell:
+    cmd: |
+      if grep -q '^bmf:' {{ osac_installer_dir }}/{{ snapshot_osac_values_file }}; then
+        sed -i '/^bmf:/,/^[a-z]/{s/enabled: false/enabled: true/}' \
+          {{ osac_installer_dir }}/{{ snapshot_osac_values_file }}
+      else
+        printf 'bmf:\n  enabled: true\n' >> {{ osac_installer_dir }}/{{ snapshot_osac_values_file }}
+      fi
+  changed_when: false
+
+- name: Apply real bmf-operator secrets
+  ansible.builtin.shell:
+    cmd: oc apply -f -
+    stdin: "{{ lookup('ansible.builtin.template', 'bmf_secrets.yml.j2') }}"
+  environment:
+    KUBECONFIG: /root/.kube/config
+  register: _secrets_result
+  changed_when: "'configured' in _secrets_result.stdout or 'created' in _secrets_result.stdout"
+  until: _secrets_result.rc == 0
+  retries: 10
+  delay: 15
+
+
 - name: Disable osac-ui (image not published yet)
   ansible.builtin.shell:
     cmd: |
