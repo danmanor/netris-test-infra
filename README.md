@@ -312,7 +312,7 @@ make setup-caas EXTRA_VARS="caas_cluster_name=my-cluster caas_discovery_vcpu=8"
 
 | Variable | Default | Description | Tested |
 |----------|---------|-------------|--------|
-| `caas_ocp_version` | `4.19` | OCP version for CaaS hosted clusters | defaults only |
+| `caas_ocp_version` | `{{ ocp_version }}` | OCP version for CaaS hosted clusters (defaults to `ocp_version`) | defaults only |
 | `caas_cluster_name` | `caas-ci-cluster` | CaaS cluster name | yes (custom) |
 | `caas_cluster_template` | `osac.templates.ocp_ci_small` | Cluster template for CaaS | defaults only |
 | `caas_host_type_id` | `ci-worker` | Resource class label for CaaS agents | defaults only |
