@@ -32,15 +32,10 @@ prep-osac:
 	ansible-playbook playbooks/prep-osac.yml $(ANSIBLE_EXTRA)
 
 run-osac-setup:
-	@echo "=== Rebuilding Helm chart dependencies ==="
-	cd /opt/osac-installer && helm dependency update charts/osac/
-	@echo "=== Running OSAC setup.sh with live output ==="
-	@for attempt in $$(seq 1 10); do \
-		echo "--- Attempt $$attempt of 10 ---"; \
-		cd /opt/osac-installer && source /tmp/osac-setup.env && ./scripts/setup.sh && break; \
-		if [ $$attempt -eq 10 ]; then echo "setup.sh failed after 10 attempts"; exit 1; fi; \
-		echo "setup.sh failed, retrying in 3 minutes..."; sleep 180; \
-	done
+	@echo "=== Installing OSAC via Helm (make install) ==="
+	cd /opt/osac-installer && make install \
+		INSTALLER_NAMESPACE=$(or $(OSAC_NAMESPACE),$(shell grep '^osac_namespace:' inventory/group_vars/all.yml | awk '{print $$2}' | tr -d '"')) \
+		VALUES_FILE=$(or $(OSAC_VALUES_FILE),$(shell grep '^osac_values_file:' inventory/group_vars/all.yml | awk '{print $$2}' | tr -d '"'))
 
 post-osac:
 	ansible-playbook playbooks/post-osac.yml $(ANSIBLE_EXTRA)
@@ -88,11 +83,11 @@ destroy:
 
 destroy-osac:
 	@echo "=== Tearing down OSAC ==="
-	cd /opt/osac-installer && source /tmp/osac-setup.env && \
-		EXTRA_SERVICES=true ./scripts/teardown.sh || true
-	oc delete namespace osac-devel shared --ignore-not-found --wait=false 2>/dev/null || true
+	cd /opt/osac-installer && make uninstall \
+		INSTALLER_NAMESPACE=$(or $(OSAC_NAMESPACE),$(shell grep '^osac_namespace:' inventory/group_vars/all.yml | awk '{print $$2}' | tr -d '"')) \
+		VALUES_FILE=$(or $(OSAC_VALUES_FILE),$(shell grep '^osac_values_file:' inventory/group_vars/all.yml | awk '{print $$2}' | tr -d '"')) \
+		2>/dev/null || true
 	rm -rf /opt/osac-installer
-	rm -f /tmp/osac-setup.env
 
 destroy-ocp:
 	ansible-playbook playbooks/destroy-ocp.yml $(ANSIBLE_EXTRA)

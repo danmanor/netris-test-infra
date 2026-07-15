@@ -93,7 +93,7 @@ After deployment, the kubeconfig is at `/root/.kube/config`.
 | `make deploy-lab` | Deploy netris-lab (K3s, topology, VMs, connectivity) | ~12 min |
 | `make deploy-ocp` | Resize OCP VM + Netris networking + Assisted Service + OCP SNO | ~35-65 min |
 | `make deploy-ocp-snapshot` | Deploy OCP+OSAC from snapshot (recert + OSAC refresh) | ~13 min |
-| `make deploy-osac` | Prepare OSAC overlay + run setup.sh + filter OS images | ~30-60 min |
+| `make deploy-osac` | Prepare OSAC values + Helm install (operators, prereqs, OSAC) + filter OS images | ~30-60 min |
 
 ### CaaS (run after deploy)
 
@@ -125,8 +125,8 @@ After deployment, the kubeconfig is at `/root/.kube/config`.
 | Target | Description |
 |--------|-------------|
 | `make connectivity` | Re-run lab connectivity (VPN, BGP, softgates) without full redeploy |
-| `make run-osac-setup` | Re-run just setup.sh with live output (after prep-osac has run) |
-| `make prep-osac` | Ansible-only OSAC prep (clone, overlay, secrets, env file) — no setup.sh |
+| `make run-osac-setup` | Re-run just `make install` in osac-installer (after prep-osac has run) |
+| `make prep-osac` | Ansible-only OSAC prep (clone, patch values, copy secrets) — no Helm install |
 | `make post-osac` | Scale down MCE operators and filter OS images to target version |
 | `make vendor-update` | Refresh vendored Ansible collections |
 | `make lint` | Run ansible-lint |
@@ -218,9 +218,12 @@ The snapshot flavor is pulled and cached during `make setup` (one-time ~60GB dow
 
 `make deploy-osac` runs in three phases:
 
-1. **`prep-osac`** (Ansible) — clones osac-installer, copies the development overlay to a working overlay (`osac-devel`), patches the operator chart to read the AAP token from a Kubernetes secret, creates placeholder secrets (AAP API token, bmf-operator configs), writes secrets (license, pull secret, SSH keys), configures env files with Netris integration settings, and disables unused components (bmf-operator).
+1. **`prep-osac`** (Ansible) — clones osac-installer, patches the Helm values file with all CI-specific settings (Netris controller URL/credentials, DNS/AWS settings, SSH keys, instance group config for cluster/network fulfillment), enables required operators (LVMS, MetalLB, CNV, MCE, bundled PostgreSQL), copies license and pull secret to the values directory, and sets up a socat forwarder for OCP ingress on port 9444.
 
-2. **`run-osac-setup`** (shell) — runs `setup.sh` directly in the terminal with live output. This installs OCP operators (LVMS, MetalLB, CNV, cert-manager, Authorino, Keycloak, AAP), deploys OSAC via Helm, applies AAP configuration, and runs post-install setup (AAP token, hub registration, tenant creation). Retries up to 10 times with a 3-minute delay.
+2. **`run-osac-setup`** (shell) — runs `make install` in the osac-installer repo, which executes three Helm install phases:
+   - **Phase 1** (`install-operators`) — installs OLM subscriptions for cert-manager, AAP, LVMS, MetalLB, CNV, and MCE via the `osac-operators` chart
+   - **Phase 2** (`install-prereqs`) — deploys Keycloak, CA certificates, trust-manager bundles, and operator CRD instances via the `osac-prereqs` chart
+   - **Phase 3** (`install-osac`) — deploys the OSAC umbrella chart (osac-operator, fulfillment-service, osac-aap, osac-ui) with post-install hooks for hub creation and template publishing
 
 3. **`post-osac`** (Ansible) — scales down MCE operators (infrastructure-operator, multicluster-engine-operator) to prevent them from resetting OS images, then filters `OS_IMAGES` in the assisted-service ConfigMap and `RHCOS_VERSIONS` in the assisted-image-service StatefulSet to only the target OCP version (`caas_ocp_version`, x86_64). Verifies the image-service pod contains only the expected version.
 
@@ -235,36 +238,88 @@ make deploy-osac EXTRA_VARS='{"osac_installer_branch": "feature-x"}'
 
 ### Key Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ocp_version` | `4.21` | OpenShift version |
-| `ocp_cluster_name` | `ocp-sno` | OCP cluster name |
-| `lab_name` | `$LAB_NAME` or `default` | Per-lab subdomain prefix (avoids DNS collisions) |
-| `dns_hosted_zone` | `ecoeng-osac-ci.devcluster.openshift.com` | Route 53 hosted zone |
-| `ocp_base_domain` | `<lab_name>.<dns_hosted_zone>` | DNS base domain (derived) |
-| `ocp_server_vcpu` | `20` | OCP VM vCPUs |
-| `ocp_server_memory_gb` | `64` | OCP VM RAM (GB) |
-| `ocp_subnet_cidr` | `192.168.40.0/24` | OCP VNet subnet |
-| `ocp_dnat_ip` | `198.51.100.2` | DNAT IP for OCP API/apps access |
-| `osac_namespace` | `osac-devel` | OSAC Kubernetes namespace |
-| `osac_kustomize_overlay` | `osac-devel` | OSAC overlay (copied from development) |
-| `osac_values_file` | `values/development/values.yaml` | Helm values file |
-| `osac_installer_branch` | `main` | osac-installer branch |
-| `osac_aap_branch` | `main` | osac-aap project branch (synced to AAP controller) |
-| `netris_username` | `netris` | Netris API username |
-| `netris_password` | `netris` | Netris API password |
-| `ew_fabric_enable` | `0` | East-West fabric (0=NS only) |
-| `caas_ocp_version` | `4.21` | OCP version for CaaS discovery ISO and release image |
-| `caas_cluster_template` | `ocp_ci_small` | Cluster template for CaaS cluster creation |
-| `caas_cluster_name` | `caas-ci-cluster` | CaaS cluster name |
-| `caas_host_type_id` | `ci-worker` | Resource class for CaaS agents |
-| `snapshot_flavor_image` | `quay.io/rh-ee-ovishlit/cluster-flavors:caas` | OCI image containing the snapshot flavor |
-| `snapshot_osac_namespace` | `osac-e2e-ci` | OSAC namespace baked into the snapshot |
-| `snapshot_osac_values_file` | `values/caas-ci/values.yaml` | Helm values file for OSAC refresh |
+All parameters are in [`inventory/group_vars/all.yml`](inventory/group_vars/all.yml). Override via `EXTRA_VARS`:
 
-See [`inventory/group_vars/all.yml`](inventory/group_vars/all.yml) for the full list.
+```bash
+make deploy-ocp EXTRA_VARS="ocp_version=4.18"
+make setup-caas EXTRA_VARS="caas_cluster_name=my-cluster caas_discovery_vcpu=8"
+```
 
-> **Note:** Variables other than `lab_name`, `dns_hosted_zone`, and the component overrides have not been tested with non-default values. Changing OCP version, cluster name, namespace, subnet, or VM sizing may require additional adjustments to the playbooks.
+#### Lab & Identity
+
+| Variable | Default | Description | Tested |
+|----------|---------|-------------|--------|
+| `lab_name` | `$LAB_NAME` or `default` | Per-lab subdomain prefix (avoids DNS collisions) | yes |
+| `dns_hosted_zone` | `ecoeng-osac-ci.devcluster.openshift.com` | Route 53 hosted zone | yes |
+| `ew_fabric_enable` | `0` | East-West fabric (0=NS only, 1=full EW+NS) | no |
+
+#### OCP Installation
+
+| Variable | Default | Description | Tested |
+|----------|---------|-------------|--------|
+| `ocp_version` | `4.21` | OpenShift version (e.g., `4.18`, `4.19`, `4.21`) | yes (4.18) |
+| `ocp_cluster_name` | `ocp-sno` | OCP cluster name | defaults only |
+| `ocp_server_vcpu` | `20` | OCP VM vCPUs | yes (16) |
+| `ocp_server_memory_gb` | `64` | OCP VM RAM in GB | yes (48) |
+| `ocp_install_disk_gb` | `100` | OCP install disk size in GB | defaults only |
+| `ocp_lvm_disk_gb` | `200` | LVM storage disk size in GB | defaults only |
+
+#### Netris Networking
+
+| Variable | Default | Description | Tested |
+|----------|---------|-------------|--------|
+| `ocp_vpc_name` | `ocp-sno` | Netris VPC name | defaults only |
+| `ocp_subnet_cidr` | `192.168.40.0/24` | OCP VNet subnet | defaults only |
+| `ocp_node_ip` | `192.168.40.2` | OCP node static IP | defaults only |
+| `ocp_snat_ip` | `198.51.100.1` | SNAT translated IP | defaults only |
+| `ocp_dnat_ip` | `198.51.100.2` | DNAT IP for API/apps access | defaults only |
+| `netris_username` | `netris` | Netris API username | defaults only |
+| `netris_password` | `netris` | Netris API password | defaults only |
+
+#### OSAC Deployment
+
+| Variable | Default | Description | Tested |
+|----------|---------|-------------|--------|
+| `osac_namespace` | `osac-devel` | OSAC Kubernetes namespace | yes |
+| `osac_values_file` | `values/development/values.yaml` | Helm values file for OSAC | defaults only |
+| `osac_installer_branch` | `main` | osac-installer git branch | defaults only |
+| `osac_installer_repo` | `https://github.com/osac-project/osac-installer.git` | osac-installer git repo | defaults only |
+
+#### OSAC Component Overrides
+
+| Variable | Default | Description | Tested |
+|----------|---------|-------------|--------|
+| `osac_operator_repo` | `https://github.com/osac-project/osac-operator.git` | osac-operator git repo (override for forks) | no |
+| `osac_operator_branch` | `""` | osac-operator branch (cloned into installer submodule) | no |
+| `osac_operator_image` | `""` | osac-operator container image override | no |
+| `fulfillment_service_repo` | `https://github.com/osac-project/fulfillment-service.git` | fulfillment-service git repo (override for forks) | no |
+| `fulfillment_service_branch` | `""` | fulfillment-service branch (cloned + CLI rebuilt) | no |
+| `fulfillment_service_image` | `""` | fulfillment-service container image override | no |
+| `osac_aap_repo` | `https://github.com/osac-project/osac-aap.git` | osac-aap git repo (override for forks) | no |
+| `osac_aap_branch` | `""` | osac-aap branch (sets `configAsCode.projectGitBranch`) | no |
+| `osac_aap_image` | `""` | osac-aap bootstrap image override | no |
+
+#### Snapshot Deployment (fast path)
+
+| Variable | Default | Description | Tested |
+|----------|---------|-------------|--------|
+| `snapshot_flavor_image` | `quay.io/rh-ee-ovishlit/cluster-flavors:caas` | OCI image containing the snapshot flavor | defaults only |
+| `snapshot_recert_image` | `quay.io/rh-ee-ovishlit/recert:latest` | Recert container image | defaults only |
+| `snapshot_osac_namespace` | `osac-e2e-ci` | OSAC namespace baked into the snapshot | defaults only |
+| `snapshot_osac_values_file` | `values/caas-ci/values.yaml` | Helm values file for OSAC refresh | defaults only |
+
+#### CaaS Configuration
+
+| Variable | Default | Description | Tested |
+|----------|---------|-------------|--------|
+| `caas_ocp_version` | `4.19` | OCP version for CaaS hosted clusters | defaults only |
+| `caas_cluster_name` | `caas-ci-cluster` | CaaS cluster name | yes (custom) |
+| `caas_cluster_template` | `osac.templates.ocp_ci_small` | Cluster template for CaaS | defaults only |
+| `caas_host_type_id` | `ci-worker` | Resource class label for CaaS agents | defaults only |
+| `caas_discovery_vcpu` | `4` | Discovery VM vCPUs | yes (8) |
+| `caas_discovery_memory_mb` | `16384` | Discovery VM memory in MB | yes (32768) |
+| `caas_discovery_disk_gb` | `100` | Discovery VM disk in GB | yes (150) |
+| `caas_discovery_vm_patterns` | `[hgx-pod00-su0-h01..03]` | VM names for CaaS discovery | defaults only |
 
 ## Testing OSAC Components
 
