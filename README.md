@@ -225,7 +225,7 @@ The snapshot flavor is pulled and cached during `make setup` (one-time ~60GB dow
    - **Phase 2** (`install-prereqs`) — deploys Keycloak, CA certificates, trust-manager bundles, and operator CRD instances via the `osac-prereqs` chart
    - **Phase 3** (`install-osac`) — deploys the OSAC umbrella chart (osac-operator, fulfillment-service, osac-aap, osac-ui) with post-install hooks for hub creation and template publishing
 
-3. **`post-osac`** (Ansible) — scales down MCE operators (infrastructure-operator, multicluster-engine-operator) to prevent them from resetting OS images, then filters `OS_IMAGES` in the assisted-service ConfigMap and `RHCOS_VERSIONS` in the assisted-image-service StatefulSet to only the target OCP version (`caas_ocp_version`, x86_64). Verifies the image-service pod contains only the expected version.
+3. **`post-osac`** (Ansible) — scales down MCE operators (infrastructure-operator, multicluster-engine-operator) to prevent them from resetting OS images, then filters `OS_IMAGES` in the assisted-service ConfigMap and `RHCOS_VERSIONS` in the assisted-image-service StatefulSet to only the target OCP version (`ocp_version`, x86_64). Verifies the image-service pod contains only the expected version.
 
 ## Configuration
 
@@ -312,7 +312,6 @@ make setup-caas EXTRA_VARS="caas_cluster_name=my-cluster caas_discovery_vcpu=8"
 
 | Variable | Default | Description | Tested |
 |----------|---------|-------------|--------|
-| `caas_ocp_version` | `{{ ocp_version }}` | OCP version for CaaS hosted clusters (defaults to `ocp_version`) | defaults only |
 | `caas_cluster_name` | `caas-ci-cluster` | CaaS cluster name | yes (custom) |
 | `caas_cluster_template` | `osac.templates.ocp_ci_small` | Cluster template for CaaS | defaults only |
 | `caas_host_type_id` | `ci-worker` | Resource class label for CaaS agents | defaults only |

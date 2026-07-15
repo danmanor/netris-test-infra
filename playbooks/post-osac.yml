@@ -42,7 +42,7 @@
               return r.stdout
 
           os_images = json.loads(run(["oc", "get", "configmap", "assisted-service", "-n", "multicluster-engine", "-o", "jsonpath={.data.OS_IMAGES}"]))
-          filtered = [i for i in os_images if i["openshift_version"] == "{{ caas_ocp_version }}" and i["cpu_architecture"] == "x86_64"]
+          filtered = [i for i in os_images if i["openshift_version"] == "{{ ocp_version }}" and i["cpu_architecture"] == "x86_64"]
           if len(filtered) == len(os_images) and len(os_images) <= 1:
               print("OS_IMAGES already filtered (%d entries, all match)" % len(os_images))
           else:
@@ -105,14 +105,14 @@
           images = json.loads(rhcos['value'])
           versions = [(i['openshift_version'], i['cpu_architecture']) for i in images]
           print(f'RHCOS_VERSIONS: {len(images)} image(s): {versions}')
-          bad = [v for v in versions if v != ('{{ caas_ocp_version }}', 'x86_64')]
+          bad = [v for v in versions if v != ('{{ ocp_version }}', 'x86_64')]
           if bad:
               print(f'ERROR: unexpected images: {bad}')
               sys.exit(1)
           if not versions:
               print('ERROR: no images found')
               sys.exit(1)
-          print('OK: only {{ caas_ocp_version }} x86_64')
+          print('OK: only {{ ocp_version }} x86_64')
           "
       environment:
         KUBECONFIG: /root/.kube/config
