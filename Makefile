@@ -3,7 +3,7 @@
        restore-ocp-snapshot snapshot-refresh prep-snapshot-refresh run-snapshot-refresh post-snapshot-refresh \
        setup-caas deploy-caas \
        deploy-vmaas deploy-bmaas post-install \
-       destroy destroy-osac destroy-ocp destroy-caas destroy-vmaas destroy-bmaas \
+       destroy destroy-full destroy-bg destroy-osac destroy-ocp destroy-caas destroy-vmaas destroy-bmaas \
        connectivity prep-osac run-osac-setup post-osac vendor-update lint \
        gather gather-lab gather-caas \
        cleanup-dns
@@ -120,12 +120,21 @@ post-snapshot-refresh:
 destroy:
 	ansible-playbook playbooks/destroy.yml $(ANSIBLE_EXTRA)
 
+destroy-full:
+	ansible-playbook playbooks/destroy-full.yml $(ANSIBLE_EXTRA)
+
+destroy-bg:
+	sshpass -p '$(PASSWORD)' ssh -o StrictHostKeyChecking=no root@$(SERVER) \
+		"cd /root/netris-test-infra && make destroy-full 2>&1 | tee /root/destroy.log"
+
 destroy-osac:
 	@echo "=== Tearing down OSAC ==="
-	cd /opt/osac-installer && make uninstall \
-		INSTALLER_NAMESPACE=$(or $(OSAC_NAMESPACE),$(shell grep '^osac_namespace:' inventory/group_vars/all.yml | awk '{print $$2}' | tr -d '"')) \
-		VALUES_FILE=$(or $(OSAC_VALUES_FILE),$(shell grep '^osac_values_file:' inventory/group_vars/all.yml | awk '{print $$2}' | tr -d '"')) \
-		2>/dev/null || true
+	@if [ -d /opt/osac-installer ]; then \
+		cd /opt/osac-installer && make uninstall \
+			INSTALLER_NAMESPACE=$(or $(OSAC_NAMESPACE),$(shell grep '^osac_namespace:' inventory/group_vars/all.yml | awk '{print $$2}' | tr -d '"')) \
+			VALUES_FILE=$(or $(OSAC_VALUES_FILE),$(shell grep '^osac_values_file:' inventory/group_vars/all.yml | awk '{print $$2}' | tr -d '"')) \
+			2>/dev/null || true; \
+	fi
 	rm -rf /opt/osac-installer
 
 destroy-ocp:
