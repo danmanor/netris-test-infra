@@ -110,7 +110,7 @@ run-snapshot-refresh:
 	cd /opt/osac-installer && \
 		KUBECONFIG=/root/.kube/config \
 		VALUES_FILE=$(or $(SNAPSHOT_VALUES_FILE),values/caas-ci/values.yaml) \
-		INSTALLER_NAMESPACE=$(or $(SNAPSHOT_NAMESPACE),osac-e2e-ci) \
+		INSTALLER_NAMESPACE=$(or $(SNAPSHOT_NAMESPACE),osac-devel) \
 		python3 -u scripts/refresh-after-snapshot.py
 
 post-snapshot-refresh:

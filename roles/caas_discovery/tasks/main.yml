@@ -72,21 +72,28 @@
   register: _pull_secret
   no_log: true
 
-- name: Regenerate assisted-service auth keypair
+- name: Ensure assisted-service local-auth secret exists
   ansible.builtin.shell:
     cmd: |
-      oc delete secret assisted-servicelocal-auth -n multicluster-engine --ignore-not-found
-      for i in $(seq 30); do
-        oc get secret assisted-servicelocal-auth -n multicluster-engine --no-headers 2>/dev/null && break
-        sleep 2
-      done
-      sleep 10
-      oc rollout restart deployment/assisted-service -n multicluster-engine
-      oc rollout status deployment/assisted-service -n multicluster-engine --timeout=120s
-      oc rollout restart statefulset/assisted-image-service -n multicluster-engine
-      oc rollout status statefulset/assisted-image-service -n multicluster-engine --timeout=120s
+      if oc get secret assisted-servicelocal-auth -n multicluster-engine --no-headers 2>/dev/null; then
+        echo "exists"
+      else
+        openssl ecparam -name prime256v1 -genkey -noout -out /tmp/ec-priv.pem
+        openssl ec -in /tmp/ec-priv.pem -pubout -out /tmp/ec-pub.pem 2>/dev/null
+        oc create secret generic assisted-servicelocal-auth -n multicluster-engine \
+          --from-file=ec-private-key.pem=/tmp/ec-priv.pem \
+          --from-file=ec-public-key.pem=/tmp/ec-pub.pem
+        rm -f /tmp/ec-priv.pem /tmp/ec-pub.pem
+        oc rollout restart deployment/assisted-service -n multicluster-engine
+        oc rollout status deployment/assisted-service -n multicluster-engine --timeout=180s
+        oc rollout restart statefulset/assisted-image-service -n multicluster-engine
+        oc rollout status statefulset/assisted-image-service -n multicluster-engine --timeout=180s
+        echo "created"
+      fi
   environment:
     KUBECONFIG: /root/.kube/config
+  register: _local_auth_result
+  changed_when: "'created' in _local_auth_result.stdout"
 
 - name: Create InfraEnv namespace
   ansible.builtin.command:
