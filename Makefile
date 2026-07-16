@@ -1,7 +1,8 @@
-.PHONY: deploy deploy-fast setup deploy-lab deploy-ocp deploy-ocp-snapshot deploy-osac \
+.PHONY: deploy deploy-full deploy-fast setup bootstrap disk-setup deploy-bg deploy-bg-full \
+       deploy-lab deploy-ocp deploy-ocp-snapshot deploy-osac \
        restore-ocp-snapshot snapshot-refresh prep-snapshot-refresh run-snapshot-refresh post-snapshot-refresh \
        setup-caas deploy-caas \
-       deploy-vmaas deploy-bmaas \
+       deploy-vmaas deploy-bmaas post-install \
        destroy destroy-osac destroy-ocp destroy-caas destroy-vmaas destroy-bmaas \
        connectivity prep-osac run-osac-setup post-osac vendor-update lint \
        gather gather-lab gather-caas \
@@ -9,6 +10,17 @@
 
 EXTRA_VARS ?=
 ANSIBLE_EXTRA = $(if $(EXTRA_VARS),-e '$(EXTRA_VARS)')
+
+# Remote deploy variables (used by deploy-bg)
+SERVER ?=
+PASSWORD ?=
+LAB_NAME ?=
+PULL_SECRET ?=
+LICENSE_KEY ?=
+LICENSE_ZIP ?=
+AWS_ACCESS_KEY_ID ?=
+AWS_SECRET_ACCESS_KEY ?=
+export SERVER PASSWORD LAB_NAME PULL_SECRET LICENSE_KEY LICENSE_ZIP AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
 
 # Full shared pipeline
 deploy: deploy-lab deploy-ocp deploy-osac
@@ -52,6 +64,33 @@ deploy-vmaas:
 
 deploy-bmaas:
 	@echo "BMaaS flow is not yet implemented"
+
+# --- Baremetal remote deploy additions ---
+
+# Full pipeline including CaaS + post-install
+deploy-full: setup deploy setup-caas deploy-caas post-install
+
+# Remote background deploy (from laptop → server in tmux)
+deploy-bg:
+	@DEPLOY_TARGET=deploy scripts/deploy-remote.sh
+
+# Remote full deploy including CaaS (from laptop → server in tmux)
+deploy-bg-full:
+	@DEPLOY_TARGET=deploy-full scripts/deploy-remote.sh
+
+# Bootstrap: minimal host packages required before Ansible can run
+bootstrap:
+	@echo "=== Installing minimal host prerequisites ==="
+	dnf install -y git make ansible-core python3-pip sshpass tmux
+	pip3 install ansible bcrypt netaddr
+
+# Disk setup: detect largest unused disk, mount, symlink data dirs
+disk-setup:
+	ansible-playbook playbooks/disk-setup.yml $(ANSIBLE_EXTRA)
+
+# Post-install: fix OSAC UI external access + generate access markdown
+post-install:
+	ansible-playbook playbooks/post-install.yml $(ANSIBLE_EXTRA)
 
 # Snapshot-based fast deployment
 deploy-fast: deploy-lab deploy-ocp-snapshot

@@ -1,0 +1,181 @@
+---
+- name: Set Keycloak and OSAC UI facts
+  ansible.builtin.set_fact:
+    _keycloak_ns: keycloak
+    _keycloak_route: "keycloak-keycloak.apps.{{ ocp_cluster_name }}.{{ ocp_base_domain }}"
+    _osac_ui_route: "osac-ui-{{ osac_namespace }}.apps.{{ ocp_cluster_name }}.{{ ocp_base_domain }}"
+
+- name: Set derived URLs
+  ansible.builtin.set_fact:
+    _keycloak_url: "https://{{ _keycloak_route }}"
+    _keycloak_issuer: "https://{{ _keycloak_route }}/realms/osac"
+
+- name: Get current KC_HOSTNAME
+  ansible.builtin.command:
+    cmd: >-
+      oc get deployment keycloak-service -n {{ _keycloak_ns }}
+      -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="KC_HOSTNAME")].value}'
+  environment:
+    KUBECONFIG: /root/.kube/config
+  register: _kc_hostname
+  changed_when: false
+
+- name: Patch Keycloak KC_HOSTNAME to external route
+  ansible.builtin.command:
+    cmd: >-
+      oc set env deployment/keycloak-service -n {{ _keycloak_ns }}
+      KC_HOSTNAME={{ _keycloak_route }}
+  environment:
+    KUBECONFIG: /root/.kube/config
+  when: _kc_hostname.stdout != _keycloak_route
+
+- name: Patch TLS certificate dnsNames (cert-manager)
+  ansible.builtin.command:
+    cmd: >-
+      oc patch certificate keycloak-tls -n {{ _keycloak_ns }} --type=json
+      -p '[{"op": "add", "path": "/spec/dnsNames/-", "value": "{{ _keycloak_route }}"}]'
+  environment:
+    KUBECONFIG: /root/.kube/config
+  register: _cert_patch
+  failed_when: false
+  changed_when: _cert_patch.rc == 0
+  when: _kc_hostname.stdout != _keycloak_route
+
+- name: Wait for Keycloak rollout
+  ansible.builtin.command:
+    cmd: oc rollout status deployment/keycloak-service -n {{ _keycloak_ns }} --timeout=300s
+  environment:
+    KUBECONFIG: /root/.kube/config
+  changed_when: false
+  when: _kc_hostname.stdout != _keycloak_route
+
+- name: Wait for Keycloak to become ready
+  ansible.builtin.uri:
+    url: "{{ _keycloak_url }}/realms/osac"
+    validate_certs: false
+    status_code: 200
+    timeout: 10
+  register: _kc_ready
+  retries: 30
+  delay: 10
+  until: _kc_ready.status == 200
+
+- name: Get Keycloak admin token
+  ansible.builtin.uri:
+    url: "{{ _keycloak_url }}/realms/master/protocol/openid-connect/token"
+    method: POST
+    validate_certs: false
+    body_format: form-urlencoded
+    body:
+      client_id: admin-cli
+      username: admin
+      password: admin
+      grant_type: password
+    status_code: 200
+  register: _kc_token
+
+- name: Check if osac-ui client exists
+  ansible.builtin.uri:
+    url: "{{ _keycloak_url }}/admin/realms/osac/clients?clientId=osac-ui"
+    method: GET
+    validate_certs: false
+    headers:
+      Authorization: "Bearer {{ _kc_token.json.access_token }}"
+    status_code: 200
+  register: _kc_clients
+
+- name: Create osac-ui OIDC client
+  ansible.builtin.uri:
+    url: "{{ _keycloak_url }}/admin/realms/osac/clients"
+    method: POST
+    validate_certs: false
+    headers:
+      Authorization: "Bearer {{ _kc_token.json.access_token }}"
+      Content-Type: application/json
+    body_format: json
+    body:
+      clientId: osac-ui
+      enabled: true
+      publicClient: true
+      protocol: openid-connect
+      standardFlowEnabled: true
+      directAccessGrantsEnabled: false
+      redirectUris:
+        - "https://{{ _osac_ui_route }}/callback"
+      webOrigins:
+        - "https://{{ _osac_ui_route }}"
+      attributes:
+        pkce.code.challenge.method: S256
+    status_code: 201
+  when: _kc_clients.json | length == 0
+
+- name: Patch fulfillment-controller --auth-issuer-url
+  ansible.builtin.shell:
+    cmd: |
+      idx=$(oc get deployment fulfillment-controller -n {{ osac_namespace }} -o json \
+        | jq -r --arg p "--auth-issuer-url=" \
+          '.spec.template.spec.containers[0].command | to_entries[] | select(.value | startswith($p)) | .key')
+      if [[ -n "$idx" && "$idx" != "null" ]]; then
+        oc patch deployment fulfillment-controller -n {{ osac_namespace }} --type=json \
+          -p "[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/command/${idx}\",\"value\":\"--auth-issuer-url={{ _keycloak_issuer }}\"}]"
+      fi
+  environment:
+    KUBECONFIG: /root/.kube/config
+  register: _patch_issuer
+  changed_when: "'patched' in _patch_issuer.stdout"
+
+- name: Patch fulfillment-controller --idp-url
+  ansible.builtin.shell:
+    cmd: |
+      idx=$(oc get deployment fulfillment-controller -n {{ osac_namespace }} -o json \
+        | jq -r --arg p "--idp-url=" \
+          '.spec.template.spec.containers[0].command | to_entries[] | select(.value | startswith($p)) | .key')
+      if [[ -n "$idx" && "$idx" != "null" ]]; then
+        oc patch deployment fulfillment-controller -n {{ osac_namespace }} --type=json \
+          -p "[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/command/${idx}\",\"value\":\"--idp-url={{ _keycloak_url }}\"}]"
+      fi
+  environment:
+    KUBECONFIG: /root/.kube/config
+  register: _patch_idp
+  changed_when: "'patched' in _patch_idp.stdout"
+
+- name: Patch fulfillment-grpc-server --grpc-authn-trusted-token-issuers
+  ansible.builtin.shell:
+    cmd: |
+      idx=$(oc get deployment fulfillment-grpc-server -n {{ osac_namespace }} -o json \
+        | jq -r --arg p "--grpc-authn-trusted-token-issuers=" \
+          '.spec.template.spec.containers[0].command | to_entries[] | select(.value | startswith($p)) | .key')
+      if [[ -n "$idx" && "$idx" != "null" ]]; then
+        oc patch deployment fulfillment-grpc-server -n {{ osac_namespace }} --type=json \
+          -p "[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/command/${idx}\",\"value\":\"--grpc-authn-trusted-token-issuers={{ _keycloak_issuer }}\"}]"
+      fi
+  environment:
+    KUBECONFIG: /root/.kube/config
+  register: _patch_grpc
+  changed_when: "'patched' in _patch_grpc.stdout"
+
+- name: Wait for fulfillment-controller rollout
+  ansible.builtin.command:
+    cmd: oc rollout status deployment/fulfillment-controller -n {{ osac_namespace }} --timeout=120s
+  environment:
+    KUBECONFIG: /root/.kube/config
+  changed_when: false
+
+- name: Wait for fulfillment-grpc-server rollout
+  ansible.builtin.command:
+    cmd: oc rollout status deployment/fulfillment-grpc-server -n {{ osac_namespace }} --timeout=120s
+  environment:
+    KUBECONFIG: /root/.kube/config
+  changed_when: false
+
+- name: Verify OSAC UI is reachable
+  ansible.builtin.uri:
+    url: "https://{{ _osac_ui_route }}"
+    validate_certs: false
+    status_code: 200
+    timeout: 10
+  register: _ui_check
+  retries: 5
+  delay: 5
+  until: _ui_check.status == 200
+  failed_when: false

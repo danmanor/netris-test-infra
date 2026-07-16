@@ -194,6 +194,23 @@
     msg: "publish-templates job {{ _publish_job.json.id }} finished with status: {{ _publish_status.json.status }}"
   when: _publish_status.json.status != 'successful'
 
+- name: Ensure osac CLI config directory exists
+  ansible.builtin.file:
+    path: /root/.config/osac
+    state: directory
+    mode: "0700"
+
+- name: Configure osac CLI
+  ansible.builtin.copy:
+    content: |
+      {
+        "token_script": "oc create token -n {{ snapshot_osac_namespace | default(osac_namespace) }} admin --duration 1h",
+        "insecure": true,
+        "address": "{{ _fulfillment_host.stdout }}:443"
+      }
+    dest: /root/.config/osac/config.json
+    mode: "0600"
+
 - name: Wait for cluster template to exist
   ansible.builtin.command:
     cmd: osac get clustertemplates
@@ -231,14 +248,3 @@
     validate_certs: false
     status_code: [200, 201, 409]
 
-# Step 5: Configure osac CLI
-- name: Configure osac CLI
-  ansible.builtin.copy:
-    content: |
-      {
-        "token_script": "oc create token -n {{ snapshot_osac_namespace | default(osac_namespace) }} admin --duration 1h",
-        "insecure": true,
-        "address": "{{ _fulfillment_host.stdout }}:443"
-      }
-    dest: /root/.config/osac/config.json
-    mode: "0600"
