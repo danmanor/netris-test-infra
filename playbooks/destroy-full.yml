@@ -138,6 +138,12 @@
           pkill -9 aardvark-dns 2>/dev/null || true
           rm -rf /run/containers/networks/aardvark-dns 2>/dev/null || true
           rm -rf /etc/cni/net.d/* 2>/dev/null || true
+          for chain in $(nft list table nat 2>/dev/null | grep 'chain NETAVARK' | awk '{print $2}'); do
+            nft flush chain nat "$chain" 2>/dev/null || true
+          done
+          for chain in $(nft list table nat 2>/dev/null | grep 'chain NETAVARK' | awk '{print $2}'); do
+            nft delete chain nat "$chain" 2>/dev/null || true
+          done
           sleep 2
       failed_when: false
       changed_when: true

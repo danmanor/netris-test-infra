@@ -73,6 +73,9 @@
       grant_type: password
     status_code: 200
   register: _kc_token
+  retries: 10
+  delay: 15
+  until: _kc_token.status == 200
 
 - name: Check if osac-ui client exists
   ansible.builtin.uri:
@@ -83,6 +86,9 @@
       Authorization: "Bearer {{ _kc_token.json.access_token }}"
     status_code: 200
   register: _kc_clients
+  retries: 5
+  delay: 10
+  until: _kc_clients.status == 200
 
 - name: Create osac-ui OIDC client
   ansible.builtin.uri:

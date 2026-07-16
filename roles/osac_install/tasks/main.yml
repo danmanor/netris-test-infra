@@ -115,6 +115,19 @@
 
 # --- Discover operator channels from OCP catalog ---
 
+- name: Wait for OCP cluster operators to stabilize
+  ansible.builtin.shell:
+    cmd: |
+      oc get clusteroperators --no-headers 2>/dev/null | awk '{print $3}' | grep -v True | wc -l
+  environment:
+    KUBECONFIG: /root/.kube/config
+  register: _co_check
+  until: _co_check.rc == 0 and (_co_check.stdout | trim) == "0"
+  retries: 60
+  delay: 30
+  changed_when: false
+  failed_when: false
+
 - name: Wait for OLM PackageServer to serve catalog data
   ansible.builtin.command:
     cmd: oc get packagemanifest --no-headers
@@ -122,7 +135,7 @@
     KUBECONFIG: /root/.kube/config
   register: _pkgserver_ready
   until: _pkgserver_ready.rc == 0 and (_pkgserver_ready.stdout_lines | length) > 0
-  retries: 10
+  retries: 40
   delay: 15
   changed_when: false
 
