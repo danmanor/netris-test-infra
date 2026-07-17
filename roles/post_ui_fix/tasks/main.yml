@@ -60,60 +60,55 @@
   delay: 10
   until: _kc_ready.status == 200
 
-- name: Get Keycloak admin token
-  ansible.builtin.uri:
-    url: "{{ _keycloak_url }}/realms/master/protocol/openid-connect/token"
-    method: POST
-    validate_certs: false
-    body_format: form-urlencoded
-    body:
-      client_id: admin-cli
-      username: admin
-      password: admin
-      grant_type: password
-    status_code: 200
-  register: _kc_token
-  retries: 10
-  delay: 15
-  until: _kc_token.status == 200
+- name: Ensure osac-ui OIDC client in Keycloak
+  ansible.builtin.shell:
+    cmd: |
+      KC_URL="{{ _keycloak_url }}"
+      REDIRECT_URI="https://{{ _osac_ui_route }}/callback"
+      WEB_ORIGIN="https://{{ _osac_ui_route }}"
 
-- name: Check if osac-ui client exists
-  ansible.builtin.uri:
-    url: "{{ _keycloak_url }}/admin/realms/osac/clients?clientId=osac-ui"
-    method: GET
-    validate_certs: false
-    headers:
-      Authorization: "Bearer {{ _kc_token.json.access_token }}"
-    status_code: 200
-  register: _kc_clients
-  retries: 5
-  delay: 10
-  until: _kc_clients.status == 200
+      for attempt in $(seq 1 10); do
+        TOKEN=$(curl -sk -X POST "${KC_URL}/realms/master/protocol/openid-connect/token" \
+          -d "client_id=admin-cli&username=admin&password=admin&grant_type=password" \
+          | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)
+        [ -z "$TOKEN" ] && echo "RETRY token (attempt $attempt)" && sleep 15 && continue
 
-- name: Create osac-ui OIDC client
-  ansible.builtin.uri:
-    url: "{{ _keycloak_url }}/admin/realms/osac/clients"
-    method: POST
-    validate_certs: false
-    headers:
-      Authorization: "Bearer {{ _kc_token.json.access_token }}"
-      Content-Type: application/json
-    body_format: json
-    body:
-      clientId: osac-ui
-      enabled: true
-      publicClient: true
-      protocol: openid-connect
-      standardFlowEnabled: true
-      directAccessGrantsEnabled: false
-      redirectUris:
-        - "https://{{ _osac_ui_route }}/callback"
-      webOrigins:
-        - "https://{{ _osac_ui_route }}"
-      attributes:
-        pkce.code.challenge.method: S256
-    status_code: 201
-  when: _kc_clients.json | length == 0
+        CLIENTS=$(curl -sk -H "Authorization: Bearer $TOKEN" \
+          "${KC_URL}/admin/realms/osac/clients?clientId=osac-ui" 2>/dev/null)
+        STATUS=$?
+        echo "$CLIENTS" | python3 -c "import sys,json; json.load(sys.stdin)" >/dev/null 2>&1 || {
+          echo "RETRY admin API (attempt $attempt): $CLIENTS"
+          sleep 15
+          continue
+        }
+
+        COUNT=$(echo "$CLIENTS" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null)
+        if [ "$COUNT" != "0" ]; then
+          echo "osac-ui client already exists"
+          exit 0
+        fi
+
+        RESULT=$(curl -sk -w "\n%{http_code}" -X POST \
+          -H "Authorization: Bearer $TOKEN" \
+          -H "Content-Type: application/json" \
+          "${KC_URL}/admin/realms/osac/clients" \
+          -d "{\"clientId\":\"osac-ui\",\"enabled\":true,\"publicClient\":true,\"protocol\":\"openid-connect\",\"standardFlowEnabled\":true,\"directAccessGrantsEnabled\":false,\"redirectUris\":[\"$REDIRECT_URI\"],\"webOrigins\":[\"$WEB_ORIGIN\"],\"attributes\":{\"pkce.code.challenge.method\":\"S256\"}}")
+        HTTP_CODE=$(echo "$RESULT" | tail -1)
+        if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "409" ]; then
+          echo "osac-ui client created (HTTP $HTTP_CODE)"
+          exit 0
+        fi
+        echo "RETRY create (attempt $attempt): HTTP $HTTP_CODE"
+        sleep 15
+      done
+      echo "FAILED to create osac-ui client after 10 attempts"
+      exit 1
+  register: _kc_client_result
+  changed_when: "'created' in _kc_client_result.stdout"
+
+- name: Show Keycloak client result
+  ansible.builtin.debug:
+    msg: "{{ _kc_client_result.stdout }}"
 
 - name: Patch fulfillment-controller --auth-issuer-url
   ansible.builtin.shell:
