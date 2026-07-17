@@ -66,6 +66,18 @@
     msg: "{{ _os_images_filter.stdout }}"
   when: _os_images_filter is changed
 
+- name: Flush stale NETAVARK DNAT rules before pod recreate
+  ansible.builtin.shell:
+    cmd: |
+      for chain in $(nft list table nat 2>/dev/null | grep 'chain NETAVARK' | awk '{print $2}'); do
+        nft flush chain nat "$chain" 2>/dev/null || true
+      done
+      for chain in $(nft list table nat 2>/dev/null | grep 'chain NETAVARK' | awk '{print $2}'); do
+        nft delete chain nat "$chain" 2>/dev/null || true
+      done
+  when: _ai_check.rc != 0
+  changed_when: true
+
 - name: Recreate Assisted Service with filtered images
   ansible.builtin.shell:
     cmd: podman play kube --replace --configmap /root/configmap.yml /root/pod.yml
