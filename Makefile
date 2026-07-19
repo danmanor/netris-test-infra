@@ -82,7 +82,7 @@ deploy-bg-full:
 bootstrap:
 	@echo "=== Installing minimal host prerequisites ==="
 	dnf install -y git make ansible-core python3-pip sshpass tmux
-	pip3 install ansible bcrypt netaddr
+	pip3 install ansible bcrypt netaddr kubernetes
 
 # Disk setup: detect largest unused disk, mount, symlink data dirs
 disk-setup:

@@ -124,7 +124,7 @@
 
     # --- Phase 4: Wipe data disk contents ---
 
-    - name: Stop all podman containers, pods, and reset networking
+    - name: Stop all podman containers, pods, and fully reset state
       ansible.builtin.shell:
         cmd: |
           podman pod stop --all 2>/dev/null || true
@@ -136,14 +136,13 @@
           pkill -9 conmon 2>/dev/null || true
           pkill -9 crun 2>/dev/null || true
           pkill -9 aardvark-dns 2>/dev/null || true
-          rm -rf /run/containers/networks/aardvark-dns 2>/dev/null || true
+          pkill -9 netavark 2>/dev/null || true
+          rm -rf /run/containers/ 2>/dev/null || true
+          rm -rf /run/libpod/ 2>/dev/null || true
+          rm -rf /etc/containers/networks/*.json 2>/dev/null || true
           rm -rf /etc/cni/net.d/* 2>/dev/null || true
-          for chain in $(nft list table nat 2>/dev/null | grep 'chain NETAVARK' | awk '{print $2}'); do
-            nft flush chain nat "$chain" 2>/dev/null || true
-          done
-          for chain in $(nft list table nat 2>/dev/null | grep 'chain NETAVARK' | awk '{print $2}'); do
-            nft delete chain nat "$chain" 2>/dev/null || true
-          done
+          nft flush table ip nat 2>/dev/null || true
+          nft delete table ip nat 2>/dev/null || true
           sleep 2
       failed_when: false
       changed_when: true

@@ -118,7 +118,7 @@
 - name: Wait for OCP cluster operators to stabilize
   ansible.builtin.shell:
     cmd: |
-      oc get clusteroperators --no-headers 2>/dev/null | awk '{print $3}' | grep -v True | wc -l
+      timeout 30 oc get clusteroperators --no-headers --request-timeout=20s 2>/dev/null | awk '{print $3}' | grep -v True | wc -l
   environment:
     KUBECONFIG: /root/.kube/config
   register: _co_check
@@ -126,11 +126,21 @@
   retries: 60
   delay: 30
   changed_when: false
-  failed_when: false
+
+- name: Wait for Route CRD to be available
+  ansible.builtin.shell:
+    cmd: timeout 15 oc api-resources --api-group=route.openshift.io --no-headers --request-timeout=10s 2>/dev/null
+  environment:
+    KUBECONFIG: /root/.kube/config
+  register: _route_crd
+  until: _route_crd.rc == 0 and 'routes' in _route_crd.stdout
+  retries: 60
+  delay: 10
+  changed_when: false
 
 - name: Wait for OLM PackageServer to serve catalog data
-  ansible.builtin.command:
-    cmd: oc get packagemanifest --no-headers
+  ansible.builtin.shell:
+    cmd: timeout 20 oc get packagemanifest --no-headers --request-timeout=15s 2>/dev/null
   environment:
     KUBECONFIG: /root/.kube/config
   register: _pkgserver_ready
@@ -173,6 +183,7 @@
   ansible.builtin.set_fact:
     _values_overrides: >-
       {{ {'bundledPostgres': {'enabled': true},
+          'hubAccess': {'enabled': true},
           'bmf': {'enabled': false},
           'lvms': {'enabled': true, 'channel': _lvms_channel},
           'metallb': {'enabled': true},
@@ -270,6 +281,35 @@
   loop:
     - server-ssh-key
     - server-ssh-bastion-key
+
+# --- Hub access RBAC (chart creates RoleBinding but not the ClusterRole) ---
+
+- name: Create hub-access ClusterRole for fulfillment controller
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRole
+      metadata:
+        name: "{{ osac_namespace }}-hub-access"
+      rules:
+        - apiGroups: ["osac.openshift.io"]
+          resources: ["*"]
+          verbs: ["*"]
+        - apiGroups: ["hypershift.openshift.io"]
+          resources: ["*"]
+          verbs: ["*"]
+        - apiGroups: ["agent-install.openshift.io"]
+          resources: ["*"]
+          verbs: ["*"]
+        - apiGroups: [""]
+          resources: ["namespaces", "secrets", "configmaps", "serviceaccounts"]
+          verbs: ["*"]
+        - apiGroups: ["rbac.authorization.k8s.io"]
+          resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+          verbs: ["*"]
+  environment:
+    KUBECONFIG: /root/.kube/config
 
 # --- Socat forwarder for OCP ingress ---
 

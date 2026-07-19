@@ -3,14 +3,11 @@
   hosts: all
   gather_facts: false
   pre_tasks:
-    - name: Scale down MCE operators to save resources (after CaaS is deployed)
+    - name: Scale down MCE operator to save resources (after CaaS is deployed)
       ansible.builtin.command:
-        cmd: oc scale deployment {{ item }} -n multicluster-engine --replicas=0
+        cmd: oc scale deployment infrastructure-operator -n multicluster-engine --replicas=0
       environment:
         KUBECONFIG: /root/.kube/config
-      loop:
-        - infrastructure-operator
-        - multicluster-engine-operator
       failed_when: false
       changed_when: false
   roles:

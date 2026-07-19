@@ -62,12 +62,16 @@ if [[ -n "${PASSWORD:-}" ]]; then
         -e "ssh ${SSH_OPTS}" \
         --exclude='.git' \
         --exclude='config' \
+        --exclude='license.key' \
+        --exclude='license.zip' \
         "${REPO_ROOT}/" "root@${SERVER}:/root/netris-test-infra/"
 else
     rsync -az --delete \
         -e "ssh ${SSH_OPTS}" \
         --exclude='.git' \
         --exclude='config' \
+        --exclude='license.key' \
+        --exclude='license.zip' \
         "${REPO_ROOT}/" "root@${SERVER}:/root/netris-test-infra/"
 fi
 # Sync .git separately (needed for submodule operations)
@@ -84,9 +88,8 @@ echo "Repository synced."
 
 echo ""
 echo "=== [4/7] Running bootstrap on server ==="
-run_ssh "dnf install -y git make ansible-core python3-pip sshpass tmux && pip3 install ansible bcrypt netaddr"
+run_ssh "dnf install -y git make ansible-core python3-pip sshpass tmux && pip3 install ansible bcrypt netaddr kubernetes"
 run_ssh "rpm -q epel-release >/dev/null 2>&1 || dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-\$(rpm -E %rhel).noarch.rpm || true"
-run_ssh "rpm -q crun | grep -q '1\.2[6-9]\|1\.[3-9]' && dnf downgrade -y crun-1.23.1-2.el9* || true"
 
 echo ""
 echo "=== [5/7] Running disk setup on server ==="
