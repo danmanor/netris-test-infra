@@ -6,9 +6,14 @@
 - name: Pre-flight checks
   ansible.builtin.include_tasks: "{{ role_path }}/../lab_deploy/tasks/preflight.yml"
 
+- name: Remove stale collections left by rsync
+  ansible.builtin.file:
+    path: "{{ netris_lab_dir }}/collections/ansible_collections"
+    state: absent
+
 - name: Install Ansible collections
   ansible.builtin.command:
-    cmd: ansible-galaxy collection install -r requirements.yml -p collections
+    cmd: ansible-galaxy collection install -r requirements.yml -p collections --force
     chdir: "{{ netris_lab_dir }}"
   changed_when: false
 

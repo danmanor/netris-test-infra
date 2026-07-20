@@ -45,18 +45,22 @@ fi
 run_ssh() { eval "${SSH} \"$*\""; }
 run_scp() { eval "${SCP} $*"; }
 
-echo "=== [1/7] Testing SSH connectivity to ${SERVER} ==="
+echo "=== [1/9] Pre-caching container images on jump server ==="
+"${REPO_ROOT}/scripts/cache-images.sh"
+
+echo ""
+echo "=== [2/9] Testing SSH connectivity to ${SERVER} ==="
 run_ssh "hostname && echo OK" || { echo "ERROR: Cannot SSH to ${SERVER}"; exit 1; }
 
 echo ""
-echo "=== [2/7] Copying secrets to server ==="
+echo "=== [3/9] Copying secrets to server ==="
 run_scp "${PULL_SECRET} root@${SERVER}:/root/pull-secret"
 run_scp "${LICENSE_KEY} root@${SERVER}:/root/license.key"
 run_scp "${LICENSE_ZIP} root@${SERVER}:/root/license.zip"
 echo "Secrets copied."
 
 echo ""
-echo "=== [3/7] Syncing repository to server ==="
+echo "=== [4/9] Syncing repository to server ==="
 if [[ -n "${PASSWORD:-}" ]]; then
     sshpass -p "${PASSWORD}" rsync -az --delete \
         -e "ssh ${SSH_OPTS}" \
@@ -87,16 +91,35 @@ fi
 echo "Repository synced."
 
 echo ""
-echo "=== [4/7] Running bootstrap on server ==="
+echo "=== [5/9] Syncing cached images to server ==="
+CACHE_DIR="${CACHE_DIR:-${HOME}/.cache/netris-lab/k3s-images}"
+if [[ -d "$CACHE_DIR" ]] && [[ "$(ls -A "$CACHE_DIR" 2>/dev/null)" ]]; then
+    run_ssh "mkdir -p /var/cache/netris-lab/k3s-images"
+    if [[ -n "${PASSWORD:-}" ]]; then
+        sshpass -p "${PASSWORD}" rsync -az \
+            -e "ssh ${SSH_OPTS}" \
+            "${CACHE_DIR}/" "root@${SERVER}:/var/cache/netris-lab/k3s-images/"
+    else
+        rsync -az \
+            -e "ssh ${SSH_OPTS}" \
+            "${CACHE_DIR}/" "root@${SERVER}:/var/cache/netris-lab/k3s-images/"
+    fi
+    echo "Image cache synced ($(du -sh "$CACHE_DIR" | cut -f1))."
+else
+    echo "No local image cache at ${CACHE_DIR}, server will pull from registries."
+fi
+
+echo ""
+echo "=== [6/9] Running bootstrap on server ==="
 run_ssh "dnf install -y git make ansible-core python3-pip sshpass tmux && pip3 install ansible bcrypt netaddr kubernetes"
 run_ssh "rpm -q epel-release >/dev/null 2>&1 || dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-\$(rpm -E %rhel).noarch.rpm || true"
 
 echo ""
-echo "=== [5/7] Running disk setup on server ==="
+echo "=== [7/9] Running disk setup on server ==="
 run_ssh "cd /root/netris-test-infra && make disk-setup"
 
 echo ""
-echo "=== [6/7] Writing config file ==="
+echo "=== [8/9] Writing config file ==="
 if [[ -n "${AWS_ACCESS_KEY_ID:-}" && -n "${AWS_SECRET_ACCESS_KEY:-}" ]]; then
     AWS_CONFIG="[default]
 lab_name = ${LAB_NAME}
@@ -117,7 +140,7 @@ run_ssh "ln -sf /root/license.zip /root/netris-test-infra/license.zip"
 echo "Config written."
 
 echo ""
-echo "=== [7/7] Starting deploy in tmux session ==="
+echo "=== [9/9] Starting deploy in tmux session ==="
 DEPLOY_TARGET="${DEPLOY_TARGET:-deploy}"
 run_ssh "tmux kill-session -t deploy 2>/dev/null || true"
 run_ssh "tmux new-session -d -s deploy -x 200 -y 50 'cd /root/netris-test-infra && make ${DEPLOY_TARGET} 2>&1 | tee /root/deploy.log; exec bash'"

@@ -6,10 +6,14 @@
        destroy destroy-full destroy-bg destroy-osac destroy-ocp destroy-caas destroy-vmaas destroy-bmaas \
        connectivity prep-osac run-osac-setup post-osac vendor-update lint \
        gather gather-lab gather-caas \
-       cleanup-dns
+       cleanup-dns cache-images health-check
 
 EXTRA_VARS ?=
 ANSIBLE_EXTRA = $(if $(EXTRA_VARS),-e '$(EXTRA_VARS)')
+
+# Image cache directory (jump server pre-cache, user-writable default)
+CACHE_DIR ?= $(HOME)/.cache/netris-lab/k3s-images
+export CACHE_DIR
 
 # Remote deploy variables (used by deploy-bg)
 SERVER ?=
@@ -44,10 +48,22 @@ prep-osac:
 	ansible-playbook playbooks/prep-osac.yml $(ANSIBLE_EXTRA)
 
 run-osac-setup:
-	@echo "=== Installing OSAC via Helm (make install) ==="
-	cd /opt/osac-installer && make install \
-		INSTALLER_NAMESPACE=$(or $(OSAC_NAMESPACE),$(shell grep '^osac_namespace:' inventory/group_vars/all.yml | awk '{print $$2}' | tr -d '"')) \
-		VALUES_FILE=$(or $(OSAC_VALUES_FILE),$(shell grep '^osac_values_file:' inventory/group_vars/all.yml | awk '{print $$2}' | tr -d '"'))
+	@echo "=== Installing OSAC via Helm (with retries) ==="
+	@_ns="$(or $(OSAC_NAMESPACE),$(shell grep '^osac_namespace:' inventory/group_vars/all.yml | awk '{print $$2}' | tr -d '"'))"; \
+	_vf="$(or $(OSAC_VALUES_FILE),$(shell grep '^osac_values_file:' inventory/group_vars/all.yml | awk '{print $$2}' | tr -d '"'))"; \
+	for attempt in 1 2 3; do \
+		echo "--- OSAC install attempt $$attempt/3 ---"; \
+		if cd /opt/osac-installer && make install INSTALLER_NAMESPACE="$$_ns" VALUES_FILE="$$_vf"; then \
+			echo "OSAC install succeeded on attempt $$attempt"; \
+			exit 0; \
+		fi; \
+		if [ "$$attempt" -lt 3 ]; then \
+			echo "OSAC install attempt $$attempt failed, retrying in 60s..."; \
+			sleep 60; \
+		fi; \
+	done; \
+	echo "ERROR: OSAC install failed after 3 attempts"; \
+	exit 1
 
 post-osac:
 	ansible-playbook playbooks/post-osac.yml $(ANSIBLE_EXTRA)
@@ -67,8 +83,9 @@ deploy-bmaas:
 
 # --- Baremetal remote deploy additions ---
 
-# Full pipeline including CaaS + post-install
-deploy-full: setup deploy setup-caas deploy-caas post-install
+# Full pipeline including CaaS + post-install (with progress tracking)
+deploy-full:
+	scripts/deploy-full-resilient.sh
 
 # Remote background deploy (from laptop → server in tmux)
 deploy-bg:
@@ -150,6 +167,9 @@ destroy-bmaas:
 	@echo "BMaaS teardown is not yet implemented"
 
 # Utilities
+cache-images:
+	scripts/cache-images.sh
+
 vendor-update:
 	rm -rf vendor/ansible_collections
 	ansible-galaxy collection install -r requirements.yml -p vendor --force
@@ -169,3 +189,13 @@ gather-caas:
 
 cleanup-dns:
 	ansible-playbook playbooks/cleanup-dns.yml $(ANSIBLE_EXTRA)
+
+health-check:  ## Run deployment health check (local or remote via SERVER=<ip> PASSWORD=<pw>)
+	@if [ -n "$(SERVER)" ]; then \
+		sshpass -p '$(PASSWORD)' scp -o StrictHostKeyChecking=no \
+			scripts/health-check.sh root@$(SERVER):/tmp/health-check.sh; \
+		sshpass -p '$(PASSWORD)' ssh -o StrictHostKeyChecking=no root@$(SERVER) \
+			"chmod +x /tmp/health-check.sh && bash /tmp/health-check.sh"; \
+	else \
+		scripts/health-check.sh; \
+	fi
