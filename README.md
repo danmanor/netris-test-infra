@@ -101,6 +101,19 @@ After deployment, the kubeconfig is at `/root/.kube/config`.
 |--------|-------------|------|
 | `make setup-caas` | Discover hosts, label agents, register host type, configure osac CLI | ~30 min |
 | `make deploy-caas` | Create CaaS cluster using `ocp_ci_small` template | ~60 min |
+| `make destroy-caas` | `osac delete` named cluster, remove agents / InfraEnv / VM disks | ~5 min |
+| `make force-destroy-caas` | destroy-caas + force-clean stuck orders/namespaces/pods/deploys, wipe VMs, Netris orphans | ~5 min |
+
+### MaaS (run after deploy)
+
+MaaS reuses the CaaS playbooks with MaaS-specific variable overrides (template `ocp_4_20_ai_maas`, host type `g5`). No CaaS logic is duplicated.
+
+| Target | Description | Time |
+|--------|-------------|------|
+| `make setup-maas` | Discover hosts, label agents as `g5`, register host type, publish templates | ~30 min |
+| `make deploy-maas` | Create MaaS cluster using `ocp_4_20_ai_maas` template | ~60 min |
+| `make destroy-maas` | `osac delete` MaaS cluster + agents / InfraEnv (same as destroy-caas with MaaS vars) | ~5 min |
+| `make force-destroy-maas` | force-destroy-caas with MaaS vars | ~5 min |
 
 ### Other flows (run after deploy)
 
@@ -116,7 +129,10 @@ After deployment, the kubeconfig is at `/root/.kube/config`.
 | `make destroy` | Tear down everything: OSAC + OCP artifacts + netris-lab |
 | `make destroy-osac` | Tear down OSAC: helm releases, operators, CRDs, namespaces (live output) |
 | `make destroy-ocp` | Reset OCP for reinstall: delete cluster, recreate disk, boot VM |
-| `make destroy-caas` | CaaS teardown (not yet implemented) |
+| `make destroy-caas` | Delete CaaS cluster via osac, remove agents, stop discovery VMs |
+| `make force-destroy-caas` | destroy-caas then force-clean stuck orders/namespaces/pods/deploys, wipe VMs, Netris orphans |
+| `make destroy-maas` | Delete MaaS cluster via osac (same as destroy-caas with MaaS vars) |
+| `make force-destroy-maas` | force-destroy-caas with MaaS vars |
 | `make destroy-vmaas` | VMaaS teardown (not yet implemented) |
 | `make destroy-bmaas` | BMaaS teardown (not yet implemented) |
 
@@ -172,6 +188,12 @@ make connectivity   # re-runs VPN, socat, ISP FRR, softgate agents
 ```bash
 make setup-caas     # discover hosts, label agents, register host type
 make deploy-caas    # create cluster
+```
+
+**Deploy MaaS after OSAC is up:**
+```bash
+make setup-maas     # discover hosts, label agents as g5, register MaaS host type
+make deploy-maas    # create MaaS cluster (ocp_4_20_ai_maas template)
 ```
 
 **Rebuild from scratch:**
@@ -319,6 +341,18 @@ make setup-caas EXTRA_VARS="caas_cluster_name=my-cluster caas_discovery_vcpu=8"
 | `caas_discovery_memory_mb` | `16384` | Discovery VM memory in MB | yes (32768) |
 | `caas_discovery_disk_gb` | `100` | Discovery VM disk in GB | yes (150) |
 | `caas_discovery_vm_patterns` | `[hgx-pod00-su0-h01..03]` | VM names for CaaS discovery | defaults only |
+
+#### MaaS Configuration (overrides injected by MaaS targets)
+
+MaaS reuses all CaaS variables — the targets override only what differs. Override MaaS defaults via `MAAS_CLUSTER_NAME=...` etc., or append extra vars with `EXTRA_VARS`.
+
+| Make Variable | Default | Ansible Variable Overridden | Description |
+|---------------|---------|----------------------------|-------------|
+| `MAAS_CLUSTER_NAME` | `maas-cluster` | `caas_cluster_name` | MaaS cluster name |
+| `MAAS_HOST_TYPE_ID` | `g5` | `caas_host_type_id` | Resource class label for MaaS agents |
+| `MAAS_CLUSTER_TEMPLATE` | `osac.templates.ocp_4_20_ai_maas` | `caas_cluster_template` | Cluster template for MaaS |
+| `MAAS_CATALOG_ITEM` | `maas-ocp` | `caas_catalog_item` | Catalog item ID for MaaS |
+| `MAAS_CLUSTER_PARAMS` | `enable_maas=true,...` | `caas_cluster_params` | Comma-separated `-p` flags for `deploy-maas` only |
 
 ## Testing OSAC Components
 
