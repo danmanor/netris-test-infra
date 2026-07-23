@@ -2,8 +2,10 @@
        deploy-lab deploy-ocp deploy-ocp-snapshot deploy-osac \
        restore-ocp-snapshot snapshot-refresh prep-snapshot-refresh run-snapshot-refresh post-snapshot-refresh \
        setup-caas deploy-caas \
+       setup-maas deploy-maas destroy-maas force-destroy-maas \
        deploy-vmaas deploy-bmaas post-install \
-       destroy destroy-full destroy-bg destroy-osac destroy-ocp destroy-caas destroy-vmaas destroy-bmaas \
+       destroy destroy-full destroy-bg destroy-osac destroy-ocp destroy-caas force-destroy-caas \
+       destroy-vmaas destroy-bmaas \
        connectivity prep-osac run-osac-setup post-osac vendor-update lint \
        gather gather-lab gather-caas \
        cleanup-dns cache-images health-check
@@ -80,6 +82,40 @@ deploy-vmaas:
 
 deploy-bmaas:
 	@echo "BMaaS flow is not yet implemented"
+
+# ---------------------------------------------------------------------------
+# MaaS — thin wrappers over CaaS playbooks with MaaS-specific variable overrides
+# Override any default with MAAS_CLUSTER_NAME=..., MAAS_HOST_TYPE_ID=..., etc.
+# ---------------------------------------------------------------------------
+MAAS_CLUSTER_NAME     ?= maas-cluster
+MAAS_HOST_TYPE_ID     ?= g5
+MAAS_CLUSTER_TEMPLATE ?= osac.templates.ocp_4_20_ai_maas
+MAAS_CATALOG_ITEM     ?= maas-ocp
+# Template -p flags for osac create (deploy-maas only). Comma-separated key=value.
+MAAS_CLUSTER_PARAMS   ?= enable_maas=true,enable_keycloak=true,enable_observability=true,enable_dashboard=true
+MAAS_PARAMS_JSON = $(shell python3 -c 'import json; print(json.dumps([p.strip() for p in """$(MAAS_CLUSTER_PARAMS)""".split(",") if p.strip()]))')
+
+MAAS_EXTRA = \
+  -e 'caas_cluster_name=$(MAAS_CLUSTER_NAME)' \
+  -e 'caas_host_type_id=$(MAAS_HOST_TYPE_ID)' \
+  -e 'caas_host_type_title=MaaS Node' \
+  -e 'caas_host_type_description=Bare-metal nodes for MaaS testing' \
+  -e 'caas_cluster_template=$(MAAS_CLUSTER_TEMPLATE)' \
+  -e 'caas_catalog_item=$(MAAS_CATALOG_ITEM)' \
+  -e 'caas_catalog_item_title=MaaS OCP' \
+  -e 'caas_catalog_item_description=OCP cluster for MaaS testing'
+
+setup-maas:
+	ansible-playbook playbooks/setup-caas.yml $(MAAS_EXTRA) $(ANSIBLE_EXTRA)
+
+deploy-maas:
+	ansible-playbook playbooks/deploy-caas.yml $(MAAS_EXTRA) -e '{"caas_cluster_params":$(MAAS_PARAMS_JSON)}' $(ANSIBLE_EXTRA)
+
+destroy-maas:
+	ansible-playbook playbooks/destroy-caas.yml $(MAAS_EXTRA) $(ANSIBLE_EXTRA)
+
+force-destroy-maas:
+	ansible-playbook playbooks/force-destroy-caas.yml $(MAAS_EXTRA) $(ANSIBLE_EXTRA)
 
 # --- Baremetal remote deploy additions ---
 
@@ -159,6 +195,9 @@ destroy-ocp:
 
 destroy-caas:
 	ansible-playbook playbooks/destroy-caas.yml $(ANSIBLE_EXTRA)
+
+force-destroy-caas:
+	ansible-playbook playbooks/force-destroy-caas.yml $(ANSIBLE_EXTRA)
 
 destroy-vmaas:
 	@echo "VMaaS teardown is not yet implemented"

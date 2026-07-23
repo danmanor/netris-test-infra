@@ -17,9 +17,27 @@
     chdir: "{{ netris_lab_dir }}"
   changed_when: false
 
+- name: Pre-install EPEL from URL (RHEL has no epel-release in base repos)
+  ansible.builtin.shell:
+    cmd: |
+      if rpm -q epel-release &>/dev/null; then
+        echo "already_installed"
+      else
+        dnf install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E %rhel).noarch.rpm"
+        echo "installed"
+      fi
+  register: _epel_install
+  changed_when: "'installed' == _epel_install.stdout | trim"
+  when: ansible_os_family == "RedHat"
+
 - name: Run prerequisites
   ansible.builtin.include_role:
     name: prerequisites
+
+- name: Install Python kubernetes client
+  ansible.builtin.pip:
+    name: kubernetes
+    state: present
 
 - name: Downgrade crun to avoid eBPF device filter bug (RHEL 9 systemd)
   ansible.builtin.shell:
